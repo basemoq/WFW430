@@ -1,8 +1,9 @@
 // v3 — network-first so a new GitHub Pages deploy is never stuck behind a stale cache.
 // Bumping CACHE below is still good hygiene (keeps storage tidy) but is no longer
 // required for correctness: fresh files are served whenever the device is online.
-const CACHE='wfw430-v5';
-const ASSETS=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest',
+const CACHE='wfw430-v6';
+const ASSETS=['./','./index.html','./styles.css','./app.js','./caco-parser.js',
+  './caco-classifier.js','./caco-analyzer.js','./vendor/xlsx.full.min.js','./manifest.webmanifest',
   './icons/icon-192.png','./icons/icon-512.png','./icons/icon-maskable-512.png',
   './icons/favicon-48.png','./icons/apple-touch-icon.png'];
 

@@ -1,0 +1,9 @@
+{
+  "name": "wfw430-control-center",
+  "private": true,
+  "version": "3.0.0",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "check": "node --check app.js && node --check caco-parser.js && node --check caco-classifier.js && node --check caco-analyzer.js && node --check sw.js"
+  }
+}

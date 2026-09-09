@@ -64,6 +64,24 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
 .field-hint{font-weight:400;color:var(--muted);font-size:11px}
 
+/* CACO Analyzer */
+.caco-upload{margin-bottom:16px}.caco-upload-main{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:16px;align-items:stretch}
+.file-drop{min-height:132px;border:2px dashed #84adff;border-radius:14px;background:var(--primary-soft);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;cursor:pointer;transition:border-color .2s,background .2s}
+.file-drop:hover,.file-drop.dragging{border-color:var(--primary);background:#dbe8ff}.file-drop strong{font-size:16px}.file-drop span{font-size:13px;color:var(--muted);margin:4px 0 12px}.file-drop input{max-width:100%;font-size:13px}
+.caco-date-field{justify-content:center}.caco-status{margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:13px;color:#344054}
+.caco-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.caco-review-grid,.caco-summary-grid{grid-template-columns:1fr 1fr;margin-bottom:16px}.caco-summary-grid{align-items:start}
+.validation-list{display:flex;flex-direction:column;gap:8px}.validation-item{border:1px solid var(--line);border-right:4px solid #98a2b3;border-radius:10px;padding:10px 12px}.validation-item strong,.validation-item span{display:block}.validation-item strong{font-size:13px}.validation-item span{color:var(--muted);font-size:12px;margin-top:2px}.validation-item.success{border-right-color:var(--success)}.validation-item.warn{border-right-color:var(--warn)}.validation-item.danger{border-right-color:var(--danger)}
+.caco-integration-actions{display:flex;flex-direction:column;gap:10px}.caco-integration-actions .field{font-size:13px}.caco-integration-actions button{min-height:44px}
+button:disabled{cursor:not-allowed;opacity:.5}.caco-details{margin-top:0}.caco-table-head{align-items:end}.caco-table-head .field{min-width:190px}.caco-table{min-width:1320px}.caco-table .description-cell{white-space:normal;min-width:240px;line-height:1.45}.caco-table .review-row{background:var(--warn-soft)}
+
+@media screen and (max-width:900px){
+  .caco-upload-main{grid-template-columns:1fr}.caco-review-grid,.caco-summary-grid{grid-template-columns:1fr}.caco-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media screen and (max-width:600px){
+  .caco-kpis{grid-template-columns:1fr 1fr}.caco-table-head{align-items:stretch;flex-direction:column}.caco-table-head .field{width:100%;min-width:0}
+  .caco-table .description-cell{min-width:0}.file-drop{min-height:150px}.caco-upload{padding:12px}
+}
+
 /* Calculator modal */
 .modal-backdrop{position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
 .modal{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:480px;max-height:90vh;overflow:auto}
@@ -96,7 +114,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   /* @page (size + margins) is injected per report by printView() in app.js — see printOrientation. */
   html,body{background:#fff!important;color:#000!important;width:auto!important}
   body{font-family:Tahoma,Arial,sans-serif;direction:rtl;font-size:10pt;line-height:1.35}
-  .sidebar,.sidebar-backdrop,.topbar,.toast,.form-card,.search-input,.stack-actions,.note-box,button,.mobile-only,.modal-backdrop{display:none!important}
+  .sidebar,.sidebar-backdrop,.topbar,.toast,.form-card,.search-input,.stack-actions,.note-box,button,.mobile-only,.modal-backdrop,.no-print{display:none!important}
   .app-shell{display:block!important;min-height:auto!important}
   .main{display:block!important}
   .print-only{display:block!important}
@@ -139,5 +157,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   .row-actions{display:none!important}
   .alerts-list{display:block!important}
   .alert-item{break-inside:avoid;margin-bottom:6px}
+  .caco-kpis{grid-template-columns:repeat(3,1fr)!important}
+  .caco-review-grid,.caco-summary-grid{display:block!important}
+  .caco-review-grid .card,.caco-summary-grid .card{margin-bottom:10px}
+  .caco-table{font-size:7.5pt!important}
+  .caco-table th,.caco-table td{font-size:7.5pt!important;padding:4px!important}
   a{color:#000!important;text-decoration:none!important}
 }
