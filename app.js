@@ -20,11 +20,28 @@ function cloneDeep(obj){
 
 // Bump SCHEMA_VERSION and add a migration step below whenever the *shape* of stored
 // data needs to change. Never delete/overwrite user data here — only reshape it.
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 function migrate(data){
   let fromVersion = Number(data.schemaVersion) || 0;
-  // Example for the future:
-  // if(fromVersion === 0){ /* transform `data` in place */ fromVersion = 1; }
+  if(fromVersion < 2){
+    // v2 introduces the شيت تقفيلة-shaped closing record (paymentTotal/salesTotal/bss/
+    // spanTotal/kaakoTotal/requiredCash/actualCash). Older records used
+    // systemTotal/cash/card/other/actual/diff, whose fields do NOT mean the same thing
+    // as their v2 namesakes (e.g. old `actual` = cash+card+other, not "cash the employee
+    // physically has"; old `systemTotal` is not necessarily today's requiredCash). We
+    // never guess a v2 value from a v1 one here — we only *tag* each existing closing
+    // with the schema it was actually written in, so the rest of the app can tell them
+    // apart and render the old fields under their original names instead of silently
+    // relabeling them.
+    (data.closings||[]).forEach(c=>{
+      if(c.legacySchema!==undefined || c.schemaVersion!==undefined) return; // already tagged
+      const looksLegacy = c.paymentTotal===undefined && c.salesTotal===undefined && c.bss===undefined
+        && (c.systemTotal!==undefined || c.cash!==undefined || c.card!==undefined || c.other!==undefined || c.actual!==undefined || c.diff!==undefined);
+      c.legacySchema = looksLegacy;
+      c.schemaVersion = looksLegacy ? 1 : 2;
+    });
+    fromVersion = 2;
+  }
   data.schemaVersion = SCHEMA_VERSION;
   return data;
 }
@@ -160,10 +177,18 @@ const CLOSING_NEW_FIELDS=['date','employee','shift','paymentTotal','salesTotal',
 // Normalizes any stored closing record (old or new schema) into a display-ready shape.
 // Never mutates or deletes fields on the original record — old fields stay in localStorage
 // untouched so a rollback or an older build reading the same data loses nothing.
-// Returns null-marked ("غير متوفر") for anything that cannot be losslessly reconstructed.
+//
+// IMPORTANT: old (v1) records are NOT translated into v2 field names. `actual` in v1 was
+// cash+card+other — a different quantity from v2's actualCash ("الكاش الفعلي لديك", cash
+// physically on hand). `systemTotal` in v1 is not provably the same thing as v2's
+// requiredCash (كاكو - إسبان). Treating them as equivalent would put a fabricated number in
+// front of a manager reading historical data. So legacy records keep their original field
+// names/values under `.legacy`, are flagged `isLegacy:true`, and expose no
+// paymentTotal/salesTotal/rechargeTotal/bss/spanTotal/kaakoTotal/requiredCash/actualCash/
+// difference at all — callers must not use a legacy record to feed v2 calculations.
 function normalizeClosing(x){
-  const isLegacy = x.paymentTotal===undefined && x.salesTotal===undefined && x.bss===undefined
-    && (x.systemTotal!==undefined || x.cash!==undefined || x.card!==undefined || x.other!==undefined || x.actual!==undefined || x.diff!==undefined);
+  const isLegacy = x.legacySchema===true || (x.legacySchema===undefined && x.paymentTotal===undefined && x.salesTotal===undefined && x.bss===undefined
+    && (x.systemTotal!==undefined || x.cash!==undefined || x.card!==undefined || x.other!==undefined || x.actual!==undefined || x.diff!==undefined));
   if(!isLegacy){
     const t=computeClosingTotals(x);
     return {
@@ -173,20 +198,15 @@ function normalizeClosing(x){
       status:x.status||closingStatus(t.difference), notes:x.notes||'', isLegacy:false
     };
   }
-  // Legacy record: systemTotal/cash/card/other/actual/diff.
-  // `actual` (cash+card+other) maps losslessly to actualCash.
-  // `diff` (actual-systemTotal) maps losslessly to difference — same definition, actual-required.
-  // `systemTotal` played the same role as requiredCash (the target/expected cash) so it maps there,
-  // but it CANNOT be split back into paymentTotal/salesTotal/bss/rechargeTotal — those stay unknown,
-  // and kaakoTotal (which depends on spanTotal, also unknown) is left unknown rather than guessed.
-  const actualCash = x.actualCash!==undefined ? n(x.actualCash) : (x.actual!==undefined ? n(x.actual) : n(x.cash)+n(x.card)+n(x.other));
-  const requiredCash = x.systemTotal!==undefined ? n(x.systemTotal) : undefined;
-  const difference = x.diff!==undefined ? n(x.diff) : (requiredCash!==undefined ? actualCash-requiredCash : undefined);
+  // Legacy (v1) record — surface the original fields verbatim, under their original names,
+  // with no attempt to recompute or relabel them as v2 concepts.
+  const legacy = {systemTotal:x.systemTotal, cash:x.cash, card:x.card, other:x.other, actual:x.actual, diff:x.diff};
+  const status = x.status || (x.diff!==undefined ? closingStatus(n(x.diff)) : 'سجل بالنظام القديم');
   return {
     date:x.date, employee:x.employee, shift:x.shift,
     paymentTotal:undefined, salesTotal:undefined, rechargeTotal:undefined, bss:undefined, spanTotal:undefined,
-    kaakoTotal:undefined, requiredCash, actualCash, difference,
-    status:x.status||(difference!==undefined?closingStatus(difference):'—'), notes:x.notes||x.note||'', isLegacy:true
+    kaakoTotal:undefined, requiredCash:undefined, actualCash:undefined, difference:undefined,
+    legacy, status, notes:x.notes||x.note||'', isLegacy:true
   };
 }
 const naOr=(v,fmt=money)=>v===undefined||v===null||Number.isNaN(v)?'غير متوفر':fmt(v);
@@ -211,7 +231,10 @@ function renderDashboard(){
   const closes=state.closings.filter(x=>x.date===date);
   const totals={sales:0,services:0,complaints:0,errors:0,systemCases:0};
   logs.forEach(x=>Object.keys(totals).forEach(k=>totals[k]+=n(x[k])));
-  const diff=closes.reduce((s,x)=>s+(n(normalizeClosing(x).difference)||0),0);
+  // Legacy (v1) closings are excluded from this total on purpose — their old `diff` field
+  // is not provably the same quantity as v2's difference (see normalizeClosing), so mixing
+  // them into one sum would silently misstate the day's shortfall/surplus.
+  const diff=closes.map(normalizeClosing).filter(x=>!x.isLegacy).reduce((s,x)=>s+(n(x.difference)||0),0);
   const activeCount=logs.filter(x=>x.attendance==='مكتمل').length;
   const kpis=[
     ['إجمالي المبيعات',totals.sales,'عملية','success'],['إجمالي الخدمات',totals.services,'خدمة','success'],['الشكاوى',totals.complaints,'حالة','warn'],['الأخطاء',totals.errors,'خطأ',totals.errors>=state.settings.warningErrors?'danger':''],
@@ -405,9 +428,18 @@ function editClosing(id){
   editState.closings=id;form.dataset.editingId=id;calcClosing();fillEditButtons(form,'closing');
   switchView('closing');form.scrollIntoView({behavior:'smooth',block:'start'});
 }
+// Renders one legacy field as "label: value" if the old record actually has it, else ''.
+const legacyLine=(label,val)=>val===undefined||val===null||val===''?'':`<div>${esc(label)}: ${money(val)}</div>`;
 function renderClosings(){
   document.getElementById('closingBody').innerHTML=state.closings.map(raw=>{
     const x=normalizeClosing(raw);
+    if(x.isLegacy){
+      const l=x.legacy;
+      const required=legacyLine('systemTotal',l.systemTotal)||'غير متوفر';
+      const actual=[legacyLine('cash',l.cash),legacyLine('card',l.card),legacyLine('other',l.other),legacyLine('actual',l.actual)].join('')||'غير متوفر';
+      const diff=legacyLine('diff',l.diff)||'غير متوفر';
+      return `<tr class="legacy-row"><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}<div><span class="badge neutral">سجل بالنظام القديم</span></div></td><td data-label="الشفت">${esc(x.shift)}</td><td data-label="المطلوب">${required}</td><td data-label="الفعلي">${actual}</td><td data-label="الفرق">${diff}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="إجراء" class="row-actions">${rowActionButtons('closings',raw.id)}</td></tr>`;
+    }
     return `<tr><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}</td><td data-label="الشفت">${esc(x.shift)}</td><td data-label="المطلوب">${naOr(x.requiredCash)}</td><td data-label="الفعلي">${naOr(x.actualCash)}</td><td data-label="الفرق">${naOr(x.difference)}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="إجراء" class="row-actions">${rowActionButtons('closings',raw.id)}</td></tr>`;
   }).join('')||`<tr><td colspan="8" class="empty-row">لا توجد إغلاقات مسجلة</td></tr>`;
 }
