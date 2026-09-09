@@ -8,6 +8,27 @@ const money = v => `${n(v).toLocaleString('ar-SA',{minimumFractionDigits:2,maxim
 const fmtDate = v => v ? new Intl.DateTimeFormat('ar-SA',{year:'numeric',month:'short',day:'numeric'}).format(new Date(`${v}T12:00:00`)) : '—';
 const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 
+// structuredClone isn't available on every older browser/WebView. Falling back to a
+// JSON round-trip keeps loadState() from throwing inside its own error handler (which
+// used to be able to crash the whole app on load with a blank screen).
+function cloneDeep(obj){
+  if(typeof structuredClone === 'function'){
+    try{ return structuredClone(obj); }catch{ /* fall through to JSON clone */ }
+  }
+  return JSON.parse(JSON.stringify(obj));
+}
+
+// Bump SCHEMA_VERSION and add a migration step below whenever the *shape* of stored
+// data needs to change. Never delete/overwrite user data here — only reshape it.
+const SCHEMA_VERSION = 1;
+function migrate(data){
+  let fromVersion = Number(data.schemaVersion) || 0;
+  // Example for the future:
+  // if(fromVersion === 0){ /* transform `data` in place */ fromVersion = 1; }
+  data.schemaVersion = SCHEMA_VERSION;
+  return data;
+}
+
 const seed = {
   settings:{salesWeight:.40,servicesWeight:.25,qualityWeight:.35,complaintPenalty:10,errorPenalty:3,warningErrors:3,dangerErrors:6},
   classifications:['خطأ موظف','نقص معرفة/تدريب','مشكلة نظام','إجراء/تعليمات الشركة','مشكلة عميل','مشكلة تشغيلية بالمعرض','غير محدد'],
@@ -33,13 +54,13 @@ let state = loadState();
 function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if(!raw) return structuredClone(seed);
+    if(!raw) return migrate(cloneDeep(seed));
     const parsed = JSON.parse(raw);
-    return {...structuredClone(seed),...parsed,settings:{...seed.settings,...parsed.settings}};
-  }catch{ return structuredClone(seed); }
+    return migrate({...cloneDeep(seed),...parsed,settings:{...seed.settings,...parsed.settings}});
+  }catch{ return migrate(cloneDeep(seed)); }
 }
 function save(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); }
-function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),2200); }
+function toast(msg,type=''){ const el=document.getElementById('toast'); el.textContent=msg; el.className=`toast show${type?` ${type}`:''}`; clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),2200); }
 
 const viewTitles={dashboard:'لوحة التحكم',daily:'المتابعة اليومية',cases:'الحالات والأخطاء',knowledge:'قاعدة المعرفة',offers:'العروض',closing:'إغلاق الشفت',employees:'الموظفون',settings:'الإعدادات'};
 const sidebar=document.getElementById('sidebar');
@@ -47,16 +68,26 @@ const menuBtn=document.getElementById('menuBtn');
 const sidebarCloseBtn=document.getElementById('sidebarCloseBtn');
 const sidebarBackdrop=document.getElementById('sidebarBackdrop');
 
+const mainRegion=document.querySelector('.main');
 function setMenu(open){
   const shouldOpen=Boolean(open) && window.matchMedia('(max-width: 900px)').matches;
+  const wasOpen=sidebar.classList.contains('open');
   sidebar.classList.toggle('open',shouldOpen);
   document.body.classList.toggle('menu-open',shouldOpen);
   menuBtn.setAttribute('aria-expanded',String(shouldOpen));
+  // Keep keyboard/screen-reader users from tabbing into content hidden behind the backdrop.
+  if(mainRegion) mainRegion.toggleAttribute('inert',shouldOpen);
+  if(shouldOpen && !wasOpen) sidebarCloseBtn.focus();
+  else if(!shouldOpen && wasOpen) menuBtn.focus();
 }
 
 function switchView(name){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));
-  document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
+  document.querySelectorAll('.nav-item').forEach(b=>{
+    const active=b.dataset.view===name;
+    b.classList.toggle('active',active);
+    if(active) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
+  });
   document.getElementById('viewTitle').textContent=viewTitles[name]||'WFW430';
   setMenu(false);
   if(name==='dashboard') renderDashboard();
@@ -78,6 +109,18 @@ document.getElementById('dashboardDate').value=todayISO();
 
 autoSelects();
 function activeEmployees(){ return state.employees.filter(e=>e.status!=='غير نشط'); }
+// Currently-active employees, PLUS anyone (even later deactivated) who actually has
+// activity in `logs`. Without this, a deactivated employee's rows silently vanish from
+// past-date reports even though their numbers are still counted in the KPI totals above.
+function employeesForDate(logs){
+  const byName=new Map(activeEmployees().map(e=>[e.name,e]));
+  logs.forEach(x=>{
+    if(!byName.has(x.employee)){
+      byName.set(x.employee, state.employees.find(e=>e.name===x.employee) || {name:x.employee,status:'غير نشط'});
+    }
+  });
+  return [...byName.values()];
+}
 function autoSelects(){
   const opts=activeEmployees().map(e=>`<option value="${esc(e.name)}">${esc(e.name)}</option>`).join('');
   document.querySelectorAll('select[name=employee]').forEach(s=>{const current=s.value;s.innerHTML=opts;if([...s.options].some(o=>o.value===current))s.value=current;});
@@ -113,11 +156,12 @@ function renderDashboard(){
   ];
   document.getElementById('kpiGrid').innerHTML=kpis.map(([label,value,hint,cls])=>`<div class="kpi ${cls}"><div class="label">${label}</div><div class="value">${value}</div><div class="hint">${hint}</div></div>`).join('');
 
-  const rows=activeEmployees().map(emp=>{
+  const rows=employeesForDate(logs).map(emp=>{
     const mine=logs.filter(x=>x.employee===emp.name);
     const t={sales:0,services:0,complaints:0,errors:0,systemCases:0,followups:0};mine.forEach(x=>Object.keys(t).forEach(k=>t[k]+=n(x[k])));
     const health=employeeHealth(t.errors);
-    return `<tr><td><strong>${esc(emp.name)}</strong></td><td>${t.sales}</td><td>${t.services}</td><td>${t.complaints}</td><td>${t.errors}</td><td>${t.systemCases}</td><td>${t.followups}</td><td><span class="badge ${badgeClass(health)}">${health}</span></td></tr>`;
+    const inactiveTag=emp.status==='غير نشط'?' <span class="badge neutral" title="غير نشط حاليًا">سابقًا</span>':'';
+    return `<tr><td><strong>${esc(emp.name)}</strong>${inactiveTag}</td><td>${t.sales}</td><td>${t.services}</td><td>${t.complaints}</td><td>${t.errors}</td><td>${t.systemCases}</td><td>${t.followups}</td><td><span class="badge ${badgeClass(health)}">${health}</span></td></tr>`;
   }).join('');
   document.getElementById('employeePerformanceBody').innerHTML=rows||`<tr><td colspan="8" class="empty-row">لا يوجد موظفون نشطون</td></tr>`;
 
@@ -208,11 +252,23 @@ function printView(name=activeViewName()){
   document.getElementById('printHeaderDate').textContent=`تاريخ التصدير: ${new Intl.DateTimeFormat('ar-SA',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date())}`;
   const oldTitle=document.title;
   document.title=`WFW430_${name}_${todayISO()}`;
-  setTimeout(()=>{
-    window.print();
+
+  // window.print() is asynchronous on Android Chrome (it opens the system share/save-as-PDF
+  // sheet and returns immediately) — restoring the previous view right after calling it used
+  // to risk capturing the wrong page in the exported PDF. `afterprint` fires once the
+  // print/share flow has actually finished on both desktop and Android; the timeout below is
+  // only a safety net for the rare browser/WebView that never fires it.
+  let restored=false;
+  const restore=()=>{
+    if(restored) return; restored=true;
     document.title=oldTitle;
     if(name!==previous) switchView(previous);
-  },80);
+    window.removeEventListener('afterprint',restore);
+  };
+  window.addEventListener('afterprint',restore);
+  setTimeout(restore,4000);
+
+  setTimeout(()=>window.print(),80);
 }
 
 document.querySelectorAll('[data-print-view]').forEach(b=>b.addEventListener('click',()=>printView(b.dataset.printView)));
@@ -220,10 +276,19 @@ document.getElementById('printCurrentBtn').addEventListener('click',()=>printVie
 
 function exportBackup(){download(`WFW430_Backup_${todayISO()}.json`,JSON.stringify(state,null,2),'application/json');toast('تم تصدير النسخة الاحتياطية');}
 document.getElementById('exportBackupBtn').addEventListener('click',exportBackup);document.getElementById('settingsExportBtn').addEventListener('click',exportBackup);
-document.getElementById('importBackupInput').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const parsed=JSON.parse(await file.text());state={...structuredClone(seed),...parsed,settings:{...seed.settings,...parsed.settings}};save();autoSelects();renderAll();toast('تم استيراد النسخة الاحتياطية');}catch{alert('ملف النسخة الاحتياطية غير صالح.');}e.target.value='';});
-document.getElementById('resetBtn').addEventListener('click',()=>{if(confirm('سيتم حذف جميع السجلات المحلية والعودة للبيانات الأساسية. هل أنت متأكد؟')){state=structuredClone(seed);save();autoSelects();renderAll();toast('تمت إعادة ضبط النظام');}});
+document.getElementById('importBackupInput').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const parsed=JSON.parse(await file.text());state=migrate({...cloneDeep(seed),...parsed,settings:{...seed.settings,...parsed.settings}});save();autoSelects();renderAll();toast('تم استيراد النسخة الاحتياطية');}catch{toast('ملف النسخة الاحتياطية غير صالح.','error');}e.target.value='';});
+document.getElementById('resetBtn').addEventListener('click',()=>{if(confirm('سيتم حذف جميع السجلات المحلية والعودة للبيانات الأساسية. هل أنت متأكد؟')){state=migrate(cloneDeep(seed));save();autoSelects();renderAll();toast('تمت إعادة ضبط النظام');}});
 
 function renderAll(){renderDaily();renderCases();renderKnowledge();renderOffers();renderClosings();renderEmployees();renderSettings();renderDashboard();calcClosing();}
 renderAll();
 
-if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  // With the network-first fetch strategy above this mainly confirms an update landed;
+  // it does not affect data or require a hard refresh, so a toast is enough (no reload forced).
+  let controllerSeen=Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(controllerSeen) toast('تم تحديث النظام لأحدث نسخة');
+    controllerSeen=true;
+  });
+}
