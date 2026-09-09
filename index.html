@@ -10,6 +10,7 @@
   <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="styles.css" />
+  <style id="printPageStyle"></style>
 </head>
 <body>
   <div class="app-shell">
@@ -50,7 +51,7 @@
         </div>
         <div class="top-actions">
           <div class="today-chip" id="todayChip"></div>
-          <button class="ghost-btn pdf-btn" id="printCurrentBtn" type="button">PDF</button>
+          <button class="ghost-btn pdf-btn" id="printCurrentBtn" type="button">تصدير التقرير PDF</button>
           <button class="primary-btn" data-view-jump="daily">+ إضافة متابعة</button>
         </div>
       </header>
@@ -68,9 +69,12 @@
               <h2>ملخص التشغيل</h2>
               <p>مؤشرات قابلة للمراجعة مبنية على السجلات الفعلية.</p>
             </div>
-            <label class="field compact-field">تاريخ المتابعة
-              <input type="date" id="dashboardDate" />
-            </label>
+            <div class="heading-actions">
+              <label class="field compact-field">تاريخ المتابعة
+                <input type="date" id="dashboardDate" />
+              </label>
+              <button class="ghost-btn pdf-btn" type="button" data-print-view="dashboard">تصدير التقرير PDF</button>
+            </div>
           </div>
 
           <div class="kpi-grid" id="kpiGrid"></div>
@@ -128,7 +132,7 @@
             </form>
 
             <article class="card">
-              <div class="card-head"><div><h3>السجلات</h3><p>الأحدث أولًا.</p></div><button class="ghost-btn pdf-btn" data-print-view="daily">تصدير PDF</button></div>
+              <div class="card-head"><div><h3>السجلات</h3><p>الأحدث أولًا.</p></div><button class="ghost-btn pdf-btn" type="button" data-print-view="daily">تصدير التقرير PDF</button></div>
               <div class="table-wrap tall"><table><thead><tr><th>التاريخ</th><th>الموظف</th><th>مبيعات</th><th>خدمات</th><th>شكاوى</th><th>أخطاء</th><th>نظام</th><th>متابعة</th><th>دوام</th><th>الحالة</th><th></th></tr></thead><tbody id="dailyBody"></tbody></table></div>
             </article>
           </div>
@@ -159,7 +163,7 @@
               <button class="primary-btn full" type="submit">حفظ الحالة</button>
             </form>
             <article class="card">
-              <div class="card-head"><div><h3>الحالات المسجلة</h3><p>مع بحث سريع بالموظف أو العملية أو التصنيف.</p></div><button class="ghost-btn pdf-btn" data-print-view="cases">تصدير PDF</button></div>
+              <div class="card-head"><div><h3>الحالات المسجلة</h3><p>مع بحث سريع بالموظف أو العملية أو التصنيف.</p></div><button class="ghost-btn pdf-btn" type="button" data-print-view="cases">تصدير التقرير PDF</button></div>
               <input class="search-input" id="caseSearch" placeholder="ابحث في الحالات..." />
               <div class="table-wrap tall"><table><thead><tr><th>#</th><th>التاريخ</th><th>الموظف</th><th>العملية</th><th>التصنيف</th><th>الحالة</th><th>تدريب</th><th></th></tr></thead><tbody id="casesBody"></tbody></table></div>
             </article>
@@ -196,7 +200,7 @@
               <button class="primary-btn full" type="submit">حفظ العرض</button>
             </form>
             <article class="card">
-              <div class="card-head"><div><h3>العروض</h3><p>تحقق من الحالة والتاريخ قبل الوعد للعميل.</p></div><button class="ghost-btn pdf-btn" data-print-view="offers">تصدير PDF</button></div>
+              <div class="card-head"><div><h3>العروض</h3><p>تحقق من الحالة والتاريخ قبل الوعد للعميل.</p></div><button class="ghost-btn pdf-btn" type="button" data-print-view="offers">تصدير التقرير PDF</button></div>
               <div class="table-wrap tall"><table><thead><tr><th>العرض</th><th>الحالة</th><th>من</th><th>إلى</th><th>العميل</th><th>أعمال</th><th>المنتج</th><th></th></tr></thead><tbody id="offersBody"></tbody></table></div>
             </article>
           </div>
@@ -225,7 +229,7 @@
               <button class="primary-btn full" type="submit">حفظ الإغلاق</button>
             </form>
             <article class="card">
-              <div class="card-head"><div><h3>سجل الإغلاقات</h3><p>الفرق = الإجمالي الفعلي − إجمالي النظام.</p></div><button class="ghost-btn pdf-btn" data-print-view="closing">تصدير PDF</button></div>
+              <div class="card-head"><div><h3>سجل الإغلاقات</h3><p>الفرق = الإجمالي الفعلي − إجمالي النظام.</p></div><button class="ghost-btn pdf-btn" type="button" data-print-view="closing">تصدير التقرير PDF</button></div>
               <div class="table-wrap tall"><table><thead><tr><th>التاريخ</th><th>الموظف</th><th>الشفت</th><th>النظام</th><th>الفعلي</th><th>الفرق</th><th>الحالة</th><th></th></tr></thead><tbody id="closingBody"></tbody></table></div>
             </article>
           </div>
@@ -248,7 +252,7 @@
               <button class="primary-btn full" type="submit">إضافة الموظف</button>
             </form>
             <article class="card">
-              <div class="card-head"><div><h3>الفريق</h3><p>يمكن تعطيل الموظف بدون حذف سجلاته القديمة.</p></div></div>
+              <div class="card-head"><div><h3>الفريق</h3><p>يمكن تعطيل الموظف بدون حذف سجلاته القديمة.</p></div><button class="ghost-btn pdf-btn" type="button" data-print-view="employees">تصدير التقرير PDF</button></div>
               <div class="employee-cards" id="employeeCards"></div>
             </article>
           </div>
@@ -256,14 +260,17 @@
 
         <!-- Settings -->
         <section class="view" id="view-settings">
-          <div class="section-heading"><h2>إعدادات النظام</h2><p>غيّر الحدود والمؤشرات فقط عند اعتماد سياسة واضحة؛ لا تستخدمها كدرجة نهائية قبل جمع بيانات كافية.</p></div>
+          <div class="section-heading"><h2>إعدادات النظام</h2><p>غيّر حدود الأخطاء فقط عند اعتماد سياسة واضحة؛ هذه حدود للمراجعة وليست درجة أداء نهائية.</p></div>
           <div class="settings-grid">
             <form class="card form-card" id="settingsForm">
-              <h3>المؤشرات والحدود</h3>
+              <h3>حدود الأخطاء</h3>
               <div class="form-grid two">
-                <label class="field">المبيعات<input step="0.01" type="number" name="salesWeight" /></label>
-                <label class="field">الخدمات<input step="0.01" type="number" name="servicesWeight" /></label>
-                <label class="field">الجودة<input step="0.01" type="number" name="qualityWeight" /></label>
+                <!-- المبيعات/الخدمات/الجودة: أوزان درجة الأداء. مخفية عن المستخدم لأن النظام
+                     لا يحتسب درجة نهائية حاليًا. تبقى في الـDOM ليستمر حفظ/قراءة قيمها كما هي
+                     وعدم كسر أي نسخة احتياطية أو بيانات محفوظة. لإظهارها لاحقًا: احذف hidden. -->
+                <label class="field" hidden>المبيعات<input step="0.01" type="number" name="salesWeight" /></label>
+                <label class="field" hidden>الخدمات<input step="0.01" type="number" name="servicesWeight" /></label>
+                <label class="field" hidden>الجودة<input step="0.01" type="number" name="qualityWeight" /></label>
                 <label class="field">خصم لكل شكوى<input step="1" type="number" name="complaintPenalty" /></label>
                 <label class="field">خصم لكل خطأ<input step="1" type="number" name="errorPenalty" /></label>
                 <label class="field">حد تنبيه الأخطاء<input step="1" type="number" name="warningErrors" /></label>

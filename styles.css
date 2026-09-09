@@ -22,11 +22,33 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{min-h
 .knowledge-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.knowledge-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px}.knowledge-card h3{font-size:16px;margin:0 0 4px}.knowledge-card .common{color:var(--muted);font-size:12px;margin-bottom:13px}.steps{display:grid;gap:7px;margin-bottom:12px}.step{display:flex;gap:8px;font-size:12px}.step b{width:22px;height:22px;flex:0 0 22px;border-radius:50%;display:grid;place-items:center;background:var(--primary-soft);color:var(--primary)}.decision{border-top:1px dashed var(--line);padding-top:10px;font-size:11px;color:#475467}.decision div{margin-top:4px}
 .closing-preview{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.closing-preview>div{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px}.closing-preview span{display:block;color:var(--muted);font-size:10px}.closing-preview strong{display:block;margin-top:4px;font-size:13px}.employee-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.employee-card{border:1px solid var(--line);border-radius:12px;padding:13px;display:flex;justify-content:space-between;gap:10px}.employee-card h4{margin:0;font-size:14px}.employee-meta{font-size:11px;color:var(--muted);margin-top:4px}.stack-actions{display:flex;flex-direction:column;gap:8px;margin-top:14px}.file-label{text-align:center;cursor:pointer}.note-box{margin-top:14px;border:1px solid #b2ddff;background:#eff8ff;color:#175cd3;border-radius:12px;padding:12px;font-size:12px}
 .search-input{margin-bottom:12px}.toast{position:fixed;left:24px;bottom:24px;background:#101828;color:white;padding:11px 15px;border-radius:10px;box-shadow:var(--shadow);font-size:12px;transform:translateY(90px);opacity:0;transition:.25s;z-index:99}.toast.show{transform:translateY(0);opacity:1}.toast.error{background:var(--danger)}.toast.success{background:var(--success)}
+.heading-actions{display:flex;align-items:end;gap:10px}
+@media screen and (max-width:600px){.heading-actions{flex-direction:column;align-items:stretch}.heading-actions .pdf-btn{width:100%}}
+[hidden]{display:none!important}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 .nav-item:focus-visible{outline:2px solid #84adff;outline-offset:-2px}
-@media(max-width:1180px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}.knowledge-grid{grid-template-columns:repeat(2,1fr)}.grid-form-table{grid-template-columns:340px minmax(0,1fr)}}
-@media(max-width:900px){.app-shell{grid-template-columns:1fr}.sidebar{position:fixed;right:0;top:0;width:270px;transform:translateX(105%);transition:.25s;box-shadow:-20px 0 40px rgba(16,24,40,.22)}.sidebar.open{transform:translateX(0)}.mobile-only{display:inline-grid;place-items:center}.topbar{padding:0 14px;height:76px}.topbar h1{font-size:19px}.today-chip{display:none}.content{padding:16px}.grid-form-table,.settings-grid{grid-template-columns:1fr}.form-card{position:static}.knowledge-grid{grid-template-columns:1fr}.split{align-items:stretch;flex-direction:column}.wide,.compact-field{max-width:none}}
-@media(max-width:600px){.kpi-grid{grid-template-columns:1fr 1fr;gap:8px}.kpi{padding:13px;min-height:98px}.kpi .value{font-size:23px}.form-grid.two{grid-template-columns:1fr}.employee-cards{grid-template-columns:1fr}.closing-preview{grid-template-columns:1fr}.top-actions .primary-btn{display:none}.content{padding:12px}.card{padding:14px;border-radius:14px}.section-heading{margin-bottom:14px}}
+
+/* Mobile table → card layout. `screen` is essential: an unscoped width query would also
+   match during print (Android lays print out at the narrow mobile viewport) and would turn
+   the PDF tables into cards. No data is hidden — every cell keeps its label. */
+@media screen and (max-width:600px){
+  .table-wrap,.table-wrap.tall{overflow:visible;border:0;max-height:none}
+  .table-wrap table,.table-wrap thead,.table-wrap tbody,.table-wrap tr,.table-wrap td{display:block;width:auto}
+  .table-wrap table{min-width:0}
+  .table-wrap thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap} /* headers move into each cell's data-label */
+  .table-wrap tr{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#fff}
+  .table-wrap td{border:0;border-bottom:1px dashed #eaecf0;padding:7px 0;display:flex;justify-content:space-between;align-items:center;gap:12px;white-space:normal;text-align:left}
+  .table-wrap td:last-child{border-bottom:0}
+  .table-wrap td::before{content:attr(data-label);font-weight:700;color:var(--muted);font-size:11px;text-align:right;flex:0 0 auto}
+  .table-wrap td:empty{display:none}
+  .table-wrap td.empty-row{display:block;text-align:center}
+  .table-wrap td.empty-row::before{content:none}
+  .table-wrap tr:has(.empty-row){border-style:dashed;background:var(--surface-2)}
+  .mini-btn{min-height:36px;padding:8px 12px}
+}
+@media screen and (max-width:1180px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}.knowledge-grid{grid-template-columns:repeat(2,1fr)}.grid-form-table{grid-template-columns:340px minmax(0,1fr)}}
+@media screen and (max-width:900px){.app-shell{grid-template-columns:1fr}.sidebar{position:fixed;right:0;top:0;width:270px;transform:translateX(105%);transition:.25s;box-shadow:-20px 0 40px rgba(16,24,40,.22)}.sidebar.open{transform:translateX(0)}.mobile-only{display:inline-grid;place-items:center}.topbar{padding:0 14px;height:76px}.topbar h1{font-size:19px}.today-chip{display:none}.content{padding:16px}.grid-form-table,.settings-grid{grid-template-columns:1fr}.form-card{position:static}.knowledge-grid{grid-template-columns:1fr}.split{align-items:stretch;flex-direction:column}.wide,.compact-field{max-width:none}}
+@media screen and (max-width:600px){.kpi-grid{grid-template-columns:1fr 1fr;gap:8px}.kpi{padding:13px;min-height:98px}.kpi .value{font-size:23px}.form-grid.two{grid-template-columns:1fr}.employee-cards{grid-template-columns:1fr}.closing-preview{grid-template-columns:1fr}.top-actions .primary-btn{display:none}.content{padding:12px}.card{padding:14px;border-radius:14px}.section-heading{margin-bottom:14px}}
 
 /* v2 — mobile drawer + PDF printing */
 .print-only{display:none}
@@ -39,7 +61,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   .sidebar{transition:none!important}
 }
 
-@media(max-width:900px){
+@media screen and (max-width:900px){
   .sidebar{visibility:hidden;pointer-events:none}
   .sidebar.open{visibility:visible;pointer-events:auto;transform:translateX(0)}
   .sidebar-backdrop{display:block;position:fixed;inset:0;background:rgba(16,24,40,.46);opacity:0;pointer-events:none;transition:opacity .2s;z-index:19}
@@ -52,42 +74,51 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 }
 
 @media print{
-  @page{size:A4 landscape;margin:10mm}
-  html,body{background:#fff!important;color:#000!important}
-  body{font-family:Tahoma,Arial,sans-serif;direction:rtl}
+  /* @page (size + margins) is injected per report by printView() in app.js — see printOrientation. */
+  html,body{background:#fff!important;color:#000!important;width:auto!important}
+  body{font-family:Tahoma,Arial,sans-serif;direction:rtl;font-size:10pt;line-height:1.35}
   .sidebar,.sidebar-backdrop,.topbar,.toast,.form-card,.search-input,.stack-actions,.note-box,button,.mobile-only{display:none!important}
   .app-shell{display:block!important;min-height:auto!important}
   .main{display:block!important}
   .print-only{display:block!important}
-  .print-header{padding:0 0 10px;margin:0 0 12px;border-bottom:2px solid #101828;text-align:right}
-  .print-header strong{display:block;font-size:18pt}
-  .print-header span{display:block;font-size:13pt;font-weight:700;margin-top:2px}
+  .print-header{padding:0 0 8px;margin:0 0 12px;border-bottom:2px solid #101828;text-align:right}
+  .print-header strong{display:block;font-size:16pt}
+  .print-header span{display:block;font-size:12pt;font-weight:700;margin-top:2px}
   .print-header small{display:block;font-size:9pt;color:#475467;margin-top:2px}
-  .content{padding:0!important;max-width:none!important;margin:0!important}
+  .content{padding:0!important;max-width:none!important;margin:0!important;width:100%!important}
   .view{display:none!important}
   .view.active{display:block!important}
-  .section-heading{margin:0 0 12px!important}
-  .section-heading h2{font-size:16pt}
+  .section-heading{margin:0 0 10px!important}
+  .section-heading h2{font-size:14pt}
   .section-heading p{font-size:9pt}
   .section-heading .field{display:none!important}
   .grid-form-table,.settings-grid,.grid-2{display:block!important}
-  .card,.knowledge-card,.employee-card,.kpi{box-shadow:none!important;border:1px solid #d0d5dd!important;break-inside:avoid;background:#fff!important}
-  .card{margin-bottom:10px;padding:10px!important}
-  .kpi-grid{grid-template-columns:repeat(4,1fr)!important;gap:7px!important;margin-bottom:10px!important}
-  .kpi{min-height:70px!important;padding:9px!important}
+  /* .card deliberately does NOT get break-inside:avoid: a records table taller than one
+     page would otherwise be pushed whole to the next page and leave a large blank area.
+     Row-level protection below is what actually prevents ugly splits. */
+  .card{box-shadow:none!important;border:1px solid #d0d5dd!important;background:#fff!important;margin-bottom:10px;padding:10px!important;break-inside:auto}
+  .knowledge-card,.employee-card,.kpi{box-shadow:none!important;border:1px solid #d0d5dd!important;break-inside:avoid;background:#fff!important}
+  .card h3{font-size:12pt}
+  .card p{font-size:9pt}
+  .kpi-grid{display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:7px!important;margin-bottom:10px!important}
+  .kpi{min-height:0!important;padding:9px!important}
   .kpi::after{display:none!important}
-  .kpi .value{font-size:16pt!important;margin-top:4px!important}
+  .kpi .label{font-size:9pt!important}
+  .kpi .value{font-size:15pt!important;margin-top:4px!important}
+  .kpi .hint{font-size:8pt!important}
   .table-wrap,.table-wrap.tall{overflow:visible!important;max-height:none!important;border:0!important}
   table{width:100%!important;min-width:0!important;border-collapse:collapse!important;table-layout:auto}
   thead{display:table-header-group}
   tr{break-inside:avoid;page-break-inside:avoid}
-  th,td{font-size:8pt!important;padding:5px 4px!important;white-space:normal!important;border:1px solid #d0d5dd!important;color:#000!important}
-  th{position:static!important;background:#f2f4f7!important}
+  th,td{font-size:9.5pt!important;padding:6px 5px!important;white-space:normal!important;border:1px solid #98a2b3!important;color:#000!important;text-align:right}
+  th{position:static!important;background:#eaecf0!important;font-weight:700;font-size:9.5pt!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   td:last-child:has(button),th:last-child:empty{display:none!important}
-  .badge{border:1px solid #d0d5dd;background:#fff!important;color:#000!important;padding:2px 5px!important}
-  .knowledge-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
+  .badge{border:1px solid #98a2b3;background:#fff!important;color:#000!important;padding:2px 5px!important;font-size:9pt!important}
+  .knowledge-grid{display:grid!important;grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
   .knowledge-card{padding:10px!important}
-  .employee-cards{grid-template-columns:repeat(2,1fr)!important}
+  .employee-cards{display:grid!important;grid-template-columns:repeat(2,1fr)!important}
   .row-actions{display:none!important}
+  .alerts-list{display:block!important}
+  .alert-item{break-inside:avoid;margin-bottom:6px}
   a{color:#000!important;text-decoration:none!important}
 }

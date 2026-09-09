@@ -89,6 +89,7 @@ function switchView(name){
     if(active) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
   });
   document.getElementById('viewTitle').textContent=viewTitles[name]||'WFW430';
+  syncPrintButton(name);
   setMenu(false);
   if(name==='dashboard') renderDashboard();
 }
@@ -161,7 +162,7 @@ function renderDashboard(){
     const t={sales:0,services:0,complaints:0,errors:0,systemCases:0,followups:0};mine.forEach(x=>Object.keys(t).forEach(k=>t[k]+=n(x[k])));
     const health=employeeHealth(t.errors);
     const inactiveTag=emp.status==='غير نشط'?' <span class="badge neutral" title="غير نشط حاليًا">سابقًا</span>':'';
-    return `<tr><td><strong>${esc(emp.name)}</strong>${inactiveTag}</td><td>${t.sales}</td><td>${t.services}</td><td>${t.complaints}</td><td>${t.errors}</td><td>${t.systemCases}</td><td>${t.followups}</td><td><span class="badge ${badgeClass(health)}">${health}</span></td></tr>`;
+    return `<tr><td data-label="الموظف"><strong>${esc(emp.name)}</strong>${inactiveTag}</td><td data-label="المبيعات">${t.sales}</td><td data-label="الخدمات">${t.services}</td><td data-label="الشكاوى">${t.complaints}</td><td data-label="الأخطاء">${t.errors}</td><td data-label="حالات النظام">${t.systemCases}</td><td data-label="متابعة">${t.followups}</td><td data-label="الحالة"><span class="badge ${badgeClass(health)}">${health}</span></td></tr>`;
   }).join('');
   document.getElementById('employeePerformanceBody').innerHTML=rows||`<tr><td colspan="8" class="empty-row">لا يوجد موظفون نشطون</td></tr>`;
 
@@ -189,7 +190,7 @@ document.getElementById('dailyForm').addEventListener('submit',e=>{
 });
 function renderDaily(){
   const body=document.getElementById('dailyBody');
-  body.innerHTML=state.daily.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${esc(x.employee)}</td><td>${x.sales}</td><td>${x.services}</td><td>${x.complaints}</td><td>${x.errors}</td><td>${x.systemCases}</td><td>${x.followups}</td><td>${esc(x.attendance)}</td><td><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td><button class="mini-btn danger" data-delete="daily" data-id="${x.id}">حذف</button></td></tr>`).join('')||`<tr><td colspan="11" class="empty-row">لا توجد متابعات حتى الآن</td></tr>`;
+  body.innerHTML=state.daily.map(x=>`<tr><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}</td><td data-label="مبيعات">${x.sales}</td><td data-label="خدمات">${x.services}</td><td data-label="شكاوى">${x.complaints}</td><td data-label="أخطاء">${x.errors}</td><td data-label="نظام">${x.systemCases}</td><td data-label="متابعة">${x.followups}</td><td data-label="دوام">${esc(x.attendance)}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="إجراء"><button class="mini-btn danger" data-delete="daily" data-id="${x.id}">حذف</button></td></tr>`).join('')||`<tr><td colspan="11" class="empty-row">لا توجد متابعات حتى الآن</td></tr>`;
 }
 
 document.getElementById('caseForm').addEventListener('submit',e=>{
@@ -198,7 +199,7 @@ document.getElementById('caseForm').addEventListener('submit',e=>{
 document.getElementById('caseSearch').addEventListener('input',renderCases);
 function renderCases(){
   const q=document.getElementById('caseSearch').value.trim().toLowerCase();
-  const rows=state.cases.filter(x=>!q||JSON.stringify(x).toLowerCase().includes(q)).map(x=>`<tr><td>#${x.caseNo}</td><td>${fmtDate(x.date)}</td><td>${esc(x.employee)}</td><td>${esc(x.operation)}</td><td>${esc(x.classification)}</td><td><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td>${esc(x.training)}</td><td><button class="mini-btn danger" data-delete="cases" data-id="${x.id}">حذف</button></td></tr>`).join('');
+  const rows=state.cases.filter(x=>!q||JSON.stringify(x).toLowerCase().includes(q)).map(x=>`<tr><td data-label="#">#${x.caseNo}</td><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}</td><td data-label="العملية">${esc(x.operation)}</td><td data-label="التصنيف">${esc(x.classification)}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="تدريب">${esc(x.training)}</td><td data-label="إجراء"><button class="mini-btn danger" data-delete="cases" data-id="${x.id}">حذف</button></td></tr>`).join('');
   document.getElementById('casesBody').innerHTML=rows||`<tr><td colspan="8" class="empty-row">لا توجد حالات مطابقة</td></tr>`;
 }
 
@@ -213,7 +214,7 @@ document.getElementById('offerForm').addEventListener('submit',e=>{
   e.preventDefault();const x=formObj(e.currentTarget);x.id=uid();x.createdAt=Date.now();state.offers.unshift(x);save();renderOffers();e.currentTarget.reset();toast('تم حفظ العرض');
 });
 function renderOffers(){
-  document.getElementById('offersBody').innerHTML=state.offers.map(x=>`<tr><td><strong>${esc(x.name)}</strong></td><td><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td>${fmtDate(x.startDate)}</td><td>${fmtDate(x.endDate)}</td><td>${esc(x.segment||'—')}</td><td>${esc(x.business)}</td><td>${esc(x.product||'—')}</td><td><button class="mini-btn danger" data-delete="offers" data-id="${x.id}">حذف</button></td></tr>`).join('')||`<tr><td colspan="8" class="empty-row">لا توجد عروض مضافة بعد</td></tr>`;
+  document.getElementById('offersBody').innerHTML=state.offers.map(x=>`<tr><td data-label="العرض"><strong>${esc(x.name)}</strong></td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="من">${fmtDate(x.startDate)}</td><td data-label="إلى">${fmtDate(x.endDate)}</td><td data-label="العميل">${esc(x.segment||'—')}</td><td data-label="أعمال">${esc(x.business)}</td><td data-label="المنتج">${esc(x.product||'—')}</td><td data-label="إجراء"><button class="mini-btn danger" data-delete="offers" data-id="${x.id}">حذف</button></td></tr>`).join('')||`<tr><td colspan="8" class="empty-row">لا توجد عروض مضافة بعد</td></tr>`;
 }
 
 const closingForm=document.getElementById('closingForm');
@@ -223,7 +224,7 @@ function calcClosing(){
 }
 closingForm.addEventListener('input',calcClosing);
 closingForm.addEventListener('submit',e=>{e.preventDefault();const x=formObj(e.currentTarget);Object.assign(x,calcClosing());['systemTotal','cash','card','other'].forEach(k=>x[k]=n(x[k]));x.id=uid();x.createdAt=Date.now();state.closings.unshift(x);save();renderClosings();renderDashboard();resetKeepDate(e.currentTarget);calcClosing();toast('تم حفظ إغلاق الشفت');});
-function renderClosings(){document.getElementById('closingBody').innerHTML=state.closings.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${esc(x.employee)}</td><td>${esc(x.shift)}</td><td>${money(x.systemTotal)}</td><td>${money(x.actual)}</td><td>${money(x.diff)}</td><td><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td><button class="mini-btn danger" data-delete="closings" data-id="${x.id}">حذف</button></td></tr>`).join('')||`<tr><td colspan="8" class="empty-row">لا توجد إغلاقات مسجلة</td></tr>`;}
+function renderClosings(){document.getElementById('closingBody').innerHTML=state.closings.map(x=>`<tr><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}</td><td data-label="الشفت">${esc(x.shift)}</td><td data-label="النظام">${money(x.systemTotal)}</td><td data-label="الفعلي">${money(x.actual)}</td><td data-label="الفرق">${money(x.diff)}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="إجراء"><button class="mini-btn danger" data-delete="closings" data-id="${x.id}">حذف</button></td></tr>`).join('')||`<tr><td colspan="8" class="empty-row">لا توجد إغلاقات مسجلة</td></tr>`;}
 
 document.getElementById('employeeForm').addEventListener('submit',e=>{e.preventDefault();const x=formObj(e.currentTarget);x.id=uid();state.employees.push(x);save();autoSelects();renderEmployees();renderDashboard();e.currentTarget.reset();toast('تمت إضافة الموظف');});
 function renderEmployees(){document.getElementById('employeeCards').innerHTML=state.employees.map(e=>`<div class="employee-card"><div><h4>${esc(e.name)}</h4><div class="employee-meta">${esc(e.shift)} · ${e.username?esc(e.username):'بدون يوزر'}${e.startDate?` · بدأ ${fmtDate(e.startDate)}`:''}</div></div><div><span class="badge ${badgeClass(e.status)}">${esc(e.status)}</span><div class="row-actions" style="margin-top:8px"><button class="mini-btn" data-toggle-employee="${e.id}">${e.status==='غير نشط'?'تفعيل':'تعطيل'}</button></div></div></div>`).join('');}
@@ -243,6 +244,27 @@ function activeViewName(){
   return active?.dataset.view || 'dashboard';
 }
 
+// Page orientation per report. Wide, many-column tables get landscape; document-style
+// reports (cards, narrow tables) get portrait. Change a value here to flip a report.
+const printOrientation={
+  dashboard:'landscape', // 4 KPIs across + 8-column table
+  daily:'landscape',     // widest table (10 data columns)
+  cases:'landscape',     // 7 data columns, some long text
+  offers:'landscape',    // 7 data columns incl. dates
+  closing:'portrait',    // 7 narrow numeric columns — fits portrait, reads like a handover sheet
+  employees:'portrait',
+  knowledge:'portrait',
+  settings:'portrait'
+};
+
+// Views that own a "تصدير التقرير PDF" button inside the section itself. On these the
+// generic topbar button is hidden so there is exactly one obvious export control.
+const viewsWithOwnPrintBtn=new Set([...document.querySelectorAll('[data-print-view]')].map(b=>b.dataset.printView));
+const printCurrentBtn=document.getElementById('printCurrentBtn');
+function syncPrintButton(name){
+  printCurrentBtn.hidden=viewsWithOwnPrintBtn.has(name);
+}
+
 function printView(name=activeViewName()){
   const previous=activeViewName();
   if(name!==previous) switchView(name);
@@ -250,6 +272,9 @@ function printView(name=activeViewName()){
   const title=viewTitles[name]||'تقرير';
   document.getElementById('printHeaderTitle').textContent=title;
   document.getElementById('printHeaderDate').textContent=`تاريخ التصدير: ${new Intl.DateTimeFormat('ar-SA',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date())}`;
+  // @page can't be toggled by a class, so the rule is written per report right before printing.
+  document.getElementById('printPageStyle').textContent=
+    `@page{size:A4 ${printOrientation[name]||'portrait'};margin:12mm 10mm}`;
   const oldTitle=document.title;
   document.title=`WFW430_${name}_${todayISO()}`;
 
@@ -272,7 +297,8 @@ function printView(name=activeViewName()){
 }
 
 document.querySelectorAll('[data-print-view]').forEach(b=>b.addEventListener('click',()=>printView(b.dataset.printView)));
-document.getElementById('printCurrentBtn').addEventListener('click',()=>printView(activeViewName()));
+printCurrentBtn.addEventListener('click',()=>printView(activeViewName()));
+syncPrintButton(activeViewName()); // dashboard now has its own button, so hide the generic one on load
 
 function exportBackup(){download(`WFW430_Backup_${todayISO()}.json`,JSON.stringify(state,null,2),'application/json');toast('تم تصدير النسخة الاحتياطية');}
 document.getElementById('exportBackupBtn').addEventListener('click',exportBackup);document.getElementById('settingsExportBtn').addEventListener('click',exportBackup);
