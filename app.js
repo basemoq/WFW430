@@ -79,7 +79,7 @@ function loadState(){
 function save(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); }
 function toast(msg,type=''){ const el=document.getElementById('toast'); el.textContent=msg; el.className=`toast show${type?` ${type}`:''}`; clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),2200); }
 
-const viewTitles={dashboard:'لوحة التحكم',daily:'المتابعة اليومية',cases:'الحالات والأخطاء',knowledge:'قاعدة المعرفة',offers:'العروض',closing:'إغلاق الشفت',employees:'الموظفون',settings:'الإعدادات'};
+const viewTitles={dashboard:'لوحة التحكم',daily:'المتابعة اليومية',caco:'محلل CACO',cases:'الحالات والأخطاء',knowledge:'قاعدة المعرفة',offers:'العروض',closing:'إغلاق الشفت',employees:'الموظفون',settings:'الإعدادات'};
 const sidebar=document.getElementById('sidebar');
 const menuBtn=document.getElementById('menuBtn');
 const sidebarCloseBtn=document.getElementById('sidebarCloseBtn');
@@ -549,6 +549,7 @@ function activeViewName(){
 const printOrientation={
   dashboard:'landscape', // 4 KPIs across + 8-column table
   daily:'landscape',     // widest table (10 data columns)
+  caco:'landscape',      // detailed analyzer table
   cases:'landscape',     // 7 data columns, some long text
   offers:'landscape',    // 7 data columns incl. dates
   closing:'portrait',    // 7 narrow numeric columns — fits portrait, reads like a handover sheet
@@ -604,6 +605,63 @@ function exportBackup(){download(`WFW430_Backup_${todayISO()}.json`,JSON.stringi
 document.getElementById('exportBackupBtn').addEventListener('click',exportBackup);document.getElementById('settingsExportBtn').addEventListener('click',exportBackup);
 document.getElementById('importBackupInput').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const parsed=JSON.parse(await file.text());state=migrate({...cloneDeep(seed),...parsed,settings:{...seed.settings,...parsed.settings}});save();autoSelects();renderAll();toast('تم استيراد النسخة الاحتياطية');}catch{toast('ملف النسخة الاحتياطية غير صالح.','error');}e.target.value='';});
 document.getElementById('resetBtn').addEventListener('click',()=>{if(confirm('سيتم حذف جميع السجلات المحلية والعودة للبيانات الأساسية. هل أنت متأكد؟')){state=migrate(cloneDeep(seed));save();autoSelects();renderAll();toast('تمت إعادة ضبط النظام');}});
+
+// CACO stays a transient analysis surface. Integration writes only existing v2 record
+// fields, so localStorage remains schema-compatible and SCHEMA_VERSION does not change.
+function normalizeEmployeeIdentity(value){
+  return String(value??'').trim().toLowerCase().replace(/[\s_-]+/g,'');
+}
+function resolveCacoEmployee(value){
+  const key=normalizeEmployeeIdentity(value);
+  if(!key)return null;
+  return state.employees.find(emp=>normalizeEmployeeIdentity(emp.name)===key||normalizeEmployeeIdentity(emp.username)===key)||null;
+}
+function importCacoDaily(records,sourceName){
+  const source=`CACO: ${sourceName||'تقرير مرفوع'}`;
+  let added=0,skipped=0;
+  (records||[]).forEach(record=>{
+    const employee=resolveCacoEmployee(record.employee);
+    if(!employee){skipped++;return;}
+    const date=record.date||todayISO();
+    const duplicate=state.daily.some(x=>x.employee===employee.name&&x.date===date&&x.source===source);
+    if(duplicate){skipped++;return;}
+    state.daily.unshift({
+      id:uid(),createdAt:Date.now(),date,employee:employee.name,
+      sales:n(record.sales),services:n(record.operations),complaints:0,errors:0,systemCases:0,
+      attendance:'مكتمل',status:record.unknown?'تحتاج مراجعة':'مكتملة',
+      note:`CACO — مبيعات/عمليات ${money(record.salesOperationsAmount)}، سداد فواتير ${money(record.invoicePaymentAmount)}${record.unknown?`، غير معروف ${record.unknown}`:''}`,
+      source
+    });
+    added++;
+  });
+  if(added){save();renderDaily();renderDashboard();}
+  return {added,skipped};
+}
+function prefillCacoClosing(record,sourceName){
+  const employee=resolveCacoEmployee(record?.employee);
+  if(!employee)return {ok:false,reason:'تعذر ربط الموظف بدليل الموظفين.'};
+  const form=closingForm;
+  form.elements.date.value=record.date||todayISO();
+  autoSelects();
+  form.elements.employee.value=employee.name;
+  form.elements.paymentTotal.value=n(record.invoicePaymentAmount).toFixed(2);
+  form.elements.salesTotal.value=n(record.salesOperationsAmount).toFixed(2);
+  const trace=`CACO: ${sourceName||'تقرير مرفوع'}${record.unknown?` — ${record.unknown} نمط غير معروف مستبعد من الإجماليات المرحّلة`:''}`;
+  form.elements.notes.value=[form.elements.notes.value,trace].filter(Boolean).join(' | ');
+  calcClosing();
+  switchView('closing');
+  form.scrollIntoView({behavior:'smooth',block:'start'});
+  return {ok:true};
+}
+window.WFW430Integration={
+  getEmployees:()=>state.employees.map(emp=>({...emp})),
+  resolveEmployee:value=>{const emp=resolveCacoEmployee(value);return emp?{...emp}:null;},
+  importDaily:importCacoDaily,
+  prefillClosing:prefillCacoClosing,
+  showToast:toast,
+  todayISO,
+  money
+};
 
 ['daily','case','offer','closing','employee'].forEach(label=>{
   const btn=document.getElementById(`${label}SubmitBtn`);

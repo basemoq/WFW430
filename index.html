@@ -27,6 +27,7 @@
       <nav class="nav" aria-label="التنقل الرئيسي">
         <button class="nav-item active" data-view="dashboard" aria-current="page"><span>⌂</span> لوحة التحكم</button>
         <button class="nav-item" data-view="daily"><span>✓</span> المتابعة اليومية</button>
+        <button class="nav-item" data-view="caco"><span>▦</span> محلل CACO</button>
         <button class="nav-item" data-view="cases"><span>!</span> الحالات والأخطاء</button>
         <button class="nav-item" data-view="knowledge"><span>?</span> قاعدة المعرفة</button>
         <button class="nav-item" data-view="offers"><span>٪</span> العروض</button>
@@ -140,6 +141,102 @@
           </div>
         </section>
 
+        <!-- CACO Analyzer -->
+        <section class="view" id="view-caco">
+          <div class="section-heading split">
+            <div>
+              <h2>محلل CACO</h2>
+              <p>ارفع التقرير، راجع التصنيف والتحقق الحسابي، ثم أرسل القيم المعتمدة إلى المتابعة أو التقفيلة.</p>
+            </div>
+            <button class="ghost-btn pdf-btn" type="button" data-print-view="caco">تصدير التقرير PDF</button>
+          </div>
+
+          <article class="card caco-upload no-print">
+            <div class="caco-upload-main">
+              <label class="file-drop" id="cacoDropZone">
+                <strong>رفع تقرير CACO</strong>
+                <span>XLSX أو XLS أو CSV أو TSV — تتم المعالجة داخل الجهاز</span>
+                <input id="cacoFileInput" type="file" accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt" />
+              </label>
+              <label class="field caco-date-field">تاريخ التكامل
+                <input id="cacoIntegrationDate" type="date" />
+                <small class="field-hint">يُستخدم فقط للصفوف التي لا تحتوي تاريخًا صالحًا.</small>
+              </label>
+            </div>
+            <div id="cacoFileStatus" class="caco-status" role="status" aria-live="polite">لم يتم رفع ملف بعد.</div>
+          </article>
+
+          <article class="card caco-manual-map no-print" id="cacoManualMapPanel" hidden>
+            <div class="card-head"><div><h3>لم يتم التعرف على الأعمدة تلقائيًا</h3><p>حدد يدويًا أي عمود من الملف يقابل كل حقل مطلوب، ثم اضغط "إعادة التحليل بالربط اليدوي".</p></div></div>
+            <div class="caco-manual-map-grid" id="cacoManualMapFields"></div>
+            <div class="row-actions">
+              <button class="primary-btn" id="cacoManualMapApplyBtn" type="button">إعادة التحليل بالربط اليدوي</button>
+            </div>
+          </article>
+
+          <div id="cacoResults" hidden>
+            <div class="kpi-grid caco-kpis" id="cacoKpis"></div>
+
+            <div class="grid-2 caco-review-grid">
+              <article class="card">
+                <div class="card-head"><div><h3>التحقق والمراجعة</h3><p>صفوف الإجمالي لا تدخل في عد العمليات، وتُستخدم للتحقق فقط.</p></div></div>
+                <div id="cacoValidation" class="validation-list"></div>
+              </article>
+              <article class="card no-print">
+                <div class="card-head"><div><h3>التكامل الآمن</h3><p>لا تُحفظ التقفيلة تلقائيًا؛ تُعبأ الحقول للمراجعة أولًا.</p></div></div>
+                <div class="caco-integration-actions">
+                  <button class="primary-btn" id="cacoToDailyBtn" type="button">إضافة ملخص الموظفين للمتابعة</button>
+                  <label class="field">الموظف للتقفيلة
+                    <select id="cacoClosingEmployee"></select>
+                  </label>
+                  <button class="ghost-btn" id="cacoToClosingBtn" type="button">تعبئة إغلاق الشفت</button>
+                </div>
+              </article>
+            </div>
+
+            <article class="card no-print">
+              <div class="card-head"><div><h3>بطاقات الموظفين</h3><p>مبيعات، خدمات، سداد فواتير ومراجعة لكل موظف — مع إمكانية عرض عملياته.</p></div></div>
+              <div class="employee-cards caco-employee-cards" id="cacoEmployeeCards"></div>
+            </article>
+
+            <div class="grid-2 caco-summary-grid">
+              <article class="card">
+                <div class="card-head"><div><h3>ملخص الموظفين</h3><p>المبالغ المفصولة بين المبيعات/العمليات وسداد الفواتير.</p></div></div>
+                <div class="table-wrap"><table>
+                  <thead><tr><th>الموظف</th><th>العمليات</th><th>مبيعات</th><th>خدمات</th><th>سداد</th><th>مبيعات/عمليات</th><th>سداد فواتير</th><th>مراجعة</th></tr></thead>
+                  <tbody id="cacoEmployeeBody"></tbody>
+                </table></div>
+              </article>
+              <article class="card">
+                <div class="card-head"><div><h3>ملخص المعرض</h3><p>حسب قيمة Shop ID في المصدر دون دمج أو تخمين.</p></div></div>
+                <div class="table-wrap"><table>
+                  <thead><tr><th>المعرض</th><th>العمليات</th><th>مبيعات</th><th>خدمات</th><th>سداد</th><th>مبيعات/عمليات</th><th>سداد فواتير</th><th>غير معروف</th></tr></thead>
+                  <tbody id="cacoBranchBody"></tbody>
+                </table></div>
+              </article>
+            </div>
+
+            <article class="card caco-details">
+              <div class="card-head caco-table-head">
+                <div><h3>نتائج التصنيف</h3><p>كل صف يبقى مستقلًا؛ لا دمج تلقائيًا بسبب MSISDN أو قرب الوقت.</p></div>
+                <label class="field no-print">عرض
+                  <select id="cacoResultFilter">
+                    <option value="all">كل النتائج</option>
+                    <option value="sales_operations">المبيعات والعمليات</option>
+                    <option value="invoice_payment">سداد الفواتير</option>
+                    <option value="review">تحتاج مراجعة</option>
+                  </select>
+                </label>
+              </div>
+              <div class="table-wrap tall caco-table-only"><table class="caco-table">
+                <thead><tr><th>الصف</th><th>الموظف</th><th>الوصف</th><th>نوع العملية</th><th>نوع الخط</th><th>العائلة</th><th>الخطة</th><th>SIM</th><th>المبلغ</th><th>الخصائص</th><th>المراجعة</th></tr></thead>
+                <tbody id="cacoResultBody"></tbody>
+              </table></div>
+              <div class="caco-result-cards no-print" id="cacoResultCards"></div>
+            </article>
+          </div>
+        </section>
+
         <!-- Cases -->
         <section class="view" id="view-cases">
           <div class="section-heading"><h2>سجل الحالات والأخطاء</h2><p>لا تُصنّف كل مشكلة كخطأ موظف؛ سجّل السبب الحقيقي والإجراء النهائي.</p></div>
@@ -227,12 +324,12 @@
                 <label class="field">التاريخ<input required type="date" name="date" /></label>
                 <label class="field">الموظف<select required name="employee"></select></label>
                 <label class="field">الشفت<select name="shift"><option>صباحي</option><option>مسائي</option></select></label>
-                <label class="field">إجمالي السداد<input required inputmode="decimal" type="number" name="paymentTotal" placeholder="0" /></label>
-                <label class="field">إجمالي المبيعات<input required inputmode="decimal" type="number" name="salesTotal" placeholder="0" /></label>
-                <label class="field">إجمالي الشحن<input required inputmode="decimal" type="number" name="rechargeTotal" placeholder="0" /></label>
-                <label class="field">BSS<input required inputmode="decimal" type="number" name="bss" placeholder="0" /></label>
-                <label class="field">إجمالي الإسبان<input required inputmode="decimal" type="number" name="spanTotal" placeholder="0" /></label>
-                <label class="field">الكاش الفعلي لديك<input required inputmode="decimal" type="number" name="actualCash" placeholder="0" /></label>
+                <label class="field">إجمالي السداد<input required step="0.01" inputmode="decimal" type="number" name="paymentTotal" placeholder="0" /></label>
+                <label class="field">إجمالي المبيعات<input required step="0.01" inputmode="decimal" type="number" name="salesTotal" placeholder="0" /></label>
+                <label class="field">إجمالي الشحن<input required step="0.01" inputmode="decimal" type="number" name="rechargeTotal" placeholder="0" /></label>
+                <label class="field">BSS<input required step="0.01" inputmode="decimal" type="number" name="bss" placeholder="0" /></label>
+                <label class="field">إجمالي الإسبان<input required step="0.01" inputmode="decimal" type="number" name="spanTotal" placeholder="0" /></label>
+                <label class="field">الكاش الفعلي لديك<input required step="0.01" inputmode="decimal" type="number" name="actualCash" placeholder="0" /></label>
               </div>
               <label class="field">ملاحظات<textarea name="notes" rows="2"></textarea></label>
               <div class="closing-preview">
@@ -348,6 +445,10 @@
     </div>
   </div>
 
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="caco-parser.js"></script>
+  <script src="caco-classifier.js"></script>
   <script src="app.js"></script>
+  <script src="caco-analyzer.js"></script>
 </body>
 </html>
