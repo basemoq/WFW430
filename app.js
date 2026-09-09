@@ -20,11 +20,28 @@ function cloneDeep(obj){
 
 // Bump SCHEMA_VERSION and add a migration step below whenever the *shape* of stored
 // data needs to change. Never delete/overwrite user data here — only reshape it.
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 function migrate(data){
   let fromVersion = Number(data.schemaVersion) || 0;
-  // Example for the future:
-  // if(fromVersion === 0){ /* transform `data` in place */ fromVersion = 1; }
+  if(fromVersion < 2){
+    // v2 introduces the شيت تقفيلة-shaped closing record (paymentTotal/salesTotal/bss/
+    // spanTotal/kaakoTotal/requiredCash/actualCash). Older records used
+    // systemTotal/cash/card/other/actual/diff, whose fields do NOT mean the same thing
+    // as their v2 namesakes (e.g. old `actual` = cash+card+other, not "cash the employee
+    // physically has"; old `systemTotal` is not necessarily today's requiredCash). We
+    // never guess a v2 value from a v1 one here — we only *tag* each existing closing
+    // with the schema it was actually written in, so the rest of the app can tell them
+    // apart and render the old fields under their original names instead of silently
+    // relabeling them.
+    (data.closings||[]).forEach(c=>{
+      if(c.legacySchema!==undefined || c.schemaVersion!==undefined) return; // already tagged
+      const looksLegacy = c.paymentTotal===undefined && c.salesTotal===undefined && c.bss===undefined
+        && (c.systemTotal!==undefined || c.cash!==undefined || c.card!==undefined || c.other!==undefined || c.actual!==undefined || c.diff!==undefined);
+      c.legacySchema = looksLegacy;
+      c.schemaVersion = looksLegacy ? 1 : 2;
+    });
+    fromVersion = 2;
+  }
   data.schemaVersion = SCHEMA_VERSION;
   return data;
 }
@@ -129,6 +146,71 @@ function autoSelects(){
   document.getElementById('caseStatusSelect').innerHTML=state.caseStatuses.map(x=>`<option>${esc(x)}</option>`).join('');
 }
 
+/* ---------------------------------------------------------------------------
+ * Shift-closing business logic (تقفيلة_المبيعات_الاجمالي_للموظف.xlsx, page 1)
+ * Pure functions — safe to unit test in isolation if a test runner is ever added.
+ * ------------------------------------------------------------------------- */
+function computeClosingTotals(f){
+  const paymentTotal=n(f.paymentTotal), salesTotal=n(f.salesTotal), rechargeTotal=n(f.rechargeTotal),
+        bss=n(f.bss), spanTotal=n(f.spanTotal), actualCash=n(f.actualCash);
+  const kaakoTotal=paymentTotal+salesTotal+bss+rechargeTotal;
+  const requiredCash=kaakoTotal-spanTotal;
+  const difference=actualCash-requiredCash;
+  return {kaakoTotal,requiredCash,difference,actualCash};
+}
+function closingStatus(difference){
+  if(difference===0) return 'مطابق';
+  if(Math.abs(difference)<=1) return 'فرق بسيط';
+  return 'مراجعة عاجلة';
+}
+// difference > 0 = فائض (surplus) -> amber; < 0 = عجز (deficit) -> red; 0 -> green.
+function diffBadgeClass(difference){
+  if(difference===0) return 'success';
+  if(difference>0) return 'warn';
+  return 'danger';
+}
+
+// New schema field names introduced by this record shape. Anything in a stored record
+// that is NOT one of these (plus id/createdAt/updatedAt) is an old-schema field kept as-is.
+const CLOSING_NEW_FIELDS=['date','employee','shift','paymentTotal','salesTotal','rechargeTotal','bss','spanTotal','requiredCash','actualCash','difference','kaakoTotal','status','notes'];
+
+// Normalizes any stored closing record (old or new schema) into a display-ready shape.
+// Never mutates or deletes fields on the original record — old fields stay in localStorage
+// untouched so a rollback or an older build reading the same data loses nothing.
+//
+// IMPORTANT: old (v1) records are NOT translated into v2 field names. `actual` in v1 was
+// cash+card+other — a different quantity from v2's actualCash ("الكاش الفعلي لديك", cash
+// physically on hand). `systemTotal` in v1 is not provably the same thing as v2's
+// requiredCash (كاكو - إسبان). Treating them as equivalent would put a fabricated number in
+// front of a manager reading historical data. So legacy records keep their original field
+// names/values under `.legacy`, are flagged `isLegacy:true`, and expose no
+// paymentTotal/salesTotal/rechargeTotal/bss/spanTotal/kaakoTotal/requiredCash/actualCash/
+// difference at all — callers must not use a legacy record to feed v2 calculations.
+function normalizeClosing(x){
+  const isLegacy = x.legacySchema===true || (x.legacySchema===undefined && x.paymentTotal===undefined && x.salesTotal===undefined && x.bss===undefined
+    && (x.systemTotal!==undefined || x.cash!==undefined || x.card!==undefined || x.other!==undefined || x.actual!==undefined || x.diff!==undefined));
+  if(!isLegacy){
+    const t=computeClosingTotals(x);
+    return {
+      date:x.date, employee:x.employee, shift:x.shift,
+      paymentTotal:n(x.paymentTotal), salesTotal:n(x.salesTotal), rechargeTotal:n(x.rechargeTotal), bss:n(x.bss), spanTotal:n(x.spanTotal),
+      kaakoTotal:t.kaakoTotal, requiredCash:t.requiredCash, actualCash:n(x.actualCash), difference:t.difference,
+      status:x.status||closingStatus(t.difference), notes:x.notes||'', isLegacy:false
+    };
+  }
+  // Legacy (v1) record — surface the original fields verbatim, under their original names,
+  // with no attempt to recompute or relabel them as v2 concepts.
+  const legacy = {systemTotal:x.systemTotal, cash:x.cash, card:x.card, other:x.other, actual:x.actual, diff:x.diff};
+  const status = x.status || (x.diff!==undefined ? closingStatus(n(x.diff)) : 'سجل بالنظام القديم');
+  return {
+    date:x.date, employee:x.employee, shift:x.shift,
+    paymentTotal:undefined, salesTotal:undefined, rechargeTotal:undefined, bss:undefined, spanTotal:undefined,
+    kaakoTotal:undefined, requiredCash:undefined, actualCash:undefined, difference:undefined,
+    legacy, status, notes:x.notes||x.note||'', isLegacy:true
+  };
+}
+const naOr=(v,fmt=money)=>v===undefined||v===null||Number.isNaN(v)?'غير متوفر':fmt(v);
+
 const badgeClass=status=>{
   if(['نشط','مطابق','مغلقة','مكتملة','مستقر','فعال'].includes(status)) return 'success';
   if(['مراجعة عاجلة','تحتاج مراجعة','غير نشط','منتهي'].includes(status)) return 'danger';
@@ -147,24 +229,27 @@ function renderDashboard(){
   const date=document.getElementById('dashboardDate').value||todayISO();
   const logs=state.daily.filter(x=>x.date===date);
   const closes=state.closings.filter(x=>x.date===date);
-  const totals={sales:0,services:0,complaints:0,errors:0,systemCases:0,followups:0};
+  const totals={sales:0,services:0,complaints:0,errors:0,systemCases:0};
   logs.forEach(x=>Object.keys(totals).forEach(k=>totals[k]+=n(x[k])));
-  const diff=closes.reduce((s,x)=>s+n(x.diff),0);
+  // Legacy (v1) closings are excluded from this total on purpose — their old `diff` field
+  // is not provably the same quantity as v2's difference (see normalizeClosing), so mixing
+  // them into one sum would silently misstate the day's shortfall/surplus.
+  const diff=closes.map(normalizeClosing).filter(x=>!x.isLegacy).reduce((s,x)=>s+(n(x.difference)||0),0);
   const activeCount=logs.filter(x=>x.attendance==='مكتمل').length;
   const kpis=[
     ['إجمالي المبيعات',totals.sales,'عملية','success'],['إجمالي الخدمات',totals.services,'خدمة','success'],['الشكاوى',totals.complaints,'حالة','warn'],['الأخطاء',totals.errors,'خطأ',totals.errors>=state.settings.warningErrors?'danger':''],
-    ['حالات النظام',totals.systemCases,'حالة',''],['متابعة العملاء',totals.followups,'متابعة',''],['فرق الإغلاق',money(diff),'صافي فروقات اليوم',Math.abs(diff)>1?'danger':Math.abs(diff)>0?'warn':'success'],['موظفون مكتمل دوامهم',activeCount,`من ${activeEmployees().length}`,'']
+    ['حالات النظام',totals.systemCases,'حالة',''],['فرق الإغلاق',money(diff),'صافي فروقات اليوم',Math.abs(diff)>1?'danger':Math.abs(diff)>0?'warn':'success'],['موظفون مكتمل دوامهم',activeCount,`من ${activeEmployees().length}`,'']
   ];
   document.getElementById('kpiGrid').innerHTML=kpis.map(([label,value,hint,cls])=>`<div class="kpi ${cls}"><div class="label">${label}</div><div class="value">${value}</div><div class="hint">${hint}</div></div>`).join('');
 
   const rows=employeesForDate(logs).map(emp=>{
     const mine=logs.filter(x=>x.employee===emp.name);
-    const t={sales:0,services:0,complaints:0,errors:0,systemCases:0,followups:0};mine.forEach(x=>Object.keys(t).forEach(k=>t[k]+=n(x[k])));
+    const t={sales:0,services:0,complaints:0,errors:0,systemCases:0};mine.forEach(x=>Object.keys(t).forEach(k=>t[k]+=n(x[k])));
     const health=employeeHealth(t.errors);
     const inactiveTag=emp.status==='غير نشط'?' <span class="badge neutral" title="غير نشط حاليًا">سابقًا</span>':'';
-    return `<tr><td data-label="الموظف"><strong>${esc(emp.name)}</strong>${inactiveTag}</td><td data-label="المبيعات">${t.sales}</td><td data-label="الخدمات">${t.services}</td><td data-label="الشكاوى">${t.complaints}</td><td data-label="الأخطاء">${t.errors}</td><td data-label="حالات النظام">${t.systemCases}</td><td data-label="متابعة">${t.followups}</td><td data-label="الحالة"><span class="badge ${badgeClass(health)}">${health}</span></td></tr>`;
+    return `<tr><td data-label="الموظف"><strong>${esc(emp.name)}</strong>${inactiveTag}</td><td data-label="المبيعات">${t.sales}</td><td data-label="الخدمات">${t.services}</td><td data-label="الشكاوى">${t.complaints}</td><td data-label="الأخطاء">${t.errors}</td><td data-label="حالات النظام">${t.systemCases}</td><td data-label="الحالة"><span class="badge ${badgeClass(health)}">${health}</span></td></tr>`;
   }).join('');
-  document.getElementById('employeePerformanceBody').innerHTML=rows||`<tr><td colspan="8" class="empty-row">لا يوجد موظفون نشطون</td></tr>`;
+  document.getElementById('employeePerformanceBody').innerHTML=rows||`<tr><td colspan="7" class="empty-row">لا يوجد موظفون نشطون</td></tr>`;
 
   const alerts=[];
   activeEmployees().forEach(emp=>{
@@ -172,7 +257,7 @@ function renderDashboard(){
     const health=employeeHealth(errs);
     if(health!=='مستقر') alerts.push({type:health==='مراجعة عاجلة'?'danger':'warn',title:`${emp.name}: ${health}`,text:`${errs} أخطاء في التاريخ المختار`});
   });
-  closes.filter(x=>Math.abs(n(x.diff))>1).forEach(x=>alerts.push({type:'danger',title:`فرق إغلاق: ${x.employee}`,text:`${money(x.diff)} — ${x.shift}`}));
+  closes.map(normalizeClosing).filter(x=>x.difference!==undefined && Math.abs(n(x.difference))>1).forEach(x=>alerts.push({type:'danger',title:`فرق إغلاق: ${x.employee}`,text:`${money(x.difference)} — ${x.shift}`}));
   const openCases=state.cases.filter(x=>x.date===date && !['مغلقة','مكررة'].includes(x.status));
   if(openCases.length) alerts.push({type:'warn',title:`${openCases.length} حالة مفتوحة/متابعة`,text:'راجع الحالات قبل نهاية الشفت'});
   if(!alerts.length) alerts.push({type:'success',title:'لا توجد تنبيهات حرجة',text:'لا توجد فروقات أو أخطاء فوق الحدود المسجلة لهذا اليوم'});
@@ -184,22 +269,90 @@ document.getElementById('dashboardDate').addEventListener('change',renderDashboa
 function formObj(form){return Object.fromEntries(new FormData(form).entries());}
 function resetKeepDate(form){ const date=form.querySelector('[name=date]')?.value; form.reset(); if(form.querySelector('[name=date]')) form.querySelector('[name=date]').value=date||todayISO(); autoSelects(); }
 
+// -------- generic edit-in-place state (one active edit id per section at a time) --------
+const editState={daily:null,cases:null,offers:null,closings:null,employees:null};
+function rowActionButtons(type,id){
+  return `<button class="mini-btn" data-edit="${type}" data-id="${id}">تعديل</button><button class="mini-btn danger" data-delete="${type}" data-id="${id}">حذف</button>`;
+}
+
+// -------- Sales auto-fill from matching shift closing (same employee + same date) --------
+// Returns the salesTotal (new schema) of the most recently-created matching closing, or
+// undefined if none matches. Old-schema closings never have salesTotal, so they're excluded
+// on purpose — they cannot supply this value.
+function findClosingSales(employee,date){
+  if(!employee || !date) return undefined;
+  const matches=state.closings.filter(x=>x.employee===employee && x.date===date && x.salesTotal!==undefined);
+  if(!matches.length) return undefined;
+  matches.sort((a,b)=>n(b.createdAt)-n(a.createdAt));
+  return n(matches[0].salesTotal);
+}
+function autofillDailySales(){
+  const form=document.getElementById('dailyForm');
+  const employee=form.elements.employee.value, date=form.elements.date.value;
+  const found=findClosingSales(employee,date);
+  form.elements.sales.value = found ? found : '';
+  document.getElementById('salesAutoHint').hidden = found===undefined;
+}
+document.getElementById('dailyForm').elements.date.addEventListener('change',autofillDailySales);
+document.getElementById('dailyForm').elements.employee.addEventListener('change',autofillDailySales);
+
 document.getElementById('dailyForm').addEventListener('submit',e=>{
-  e.preventDefault(); const x=formObj(e.currentTarget);
-  ['sales','services','complaints','errors','systemCases','followups'].forEach(k=>x[k]=n(x[k]));x.id=uid();x.createdAt=Date.now();state.daily.unshift(x);save();renderDaily();renderDashboard();resetKeepDate(e.currentTarget);toast('تم حفظ المتابعة اليومية');
+  e.preventDefault(); const form=e.currentTarget; const x=formObj(form);
+  ['sales','services','complaints','errors','systemCases'].forEach(k=>x[k]=n(x[k]));
+  const editingId=editState.daily;
+  if(editingId){
+    const existing=state.daily.find(r=>r.id===editingId);
+    Object.assign(existing,x);existing.updatedAt=Date.now();
+    editState.daily=null;delete form.dataset.editingId;
+  }else{
+    x.id=uid();x.createdAt=Date.now();state.daily.unshift(x);
+  }
+  save();renderDaily();renderDashboard();resetKeepDate(form);autofillDailySales();fillEditButtons(form,'daily');toast('تم حفظ المتابعة اليومية');
 });
+document.getElementById('dailyCancelEditBtn').addEventListener('click',()=>{
+  const form=document.getElementById('dailyForm');editState.daily=null;delete form.dataset.editingId;resetKeepDate(form);autofillDailySales();fillEditButtons(form,'daily');
+});
+function editDaily(id){
+  const rec=state.daily.find(x=>x.id===id);if(!rec)return;
+  const form=document.getElementById('dailyForm');
+  ['date','employee','sales','services','complaints','errors','systemCases','attendance','status','note','source'].forEach(k=>{if(form.elements[k]) form.elements[k].value=rec[k]??'';});
+  editState.daily=id;form.dataset.editingId=id;
+  document.getElementById('salesAutoHint').hidden=true; // manual value from the record, not an auto-fetch
+  fillEditButtons(form,'daily');
+  switchView('daily');form.scrollIntoView({behavior:'smooth',block:'start'});
+}
 function renderDaily(){
   const body=document.getElementById('dailyBody');
-  body.innerHTML=state.daily.map(x=>`<tr><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}</td><td data-label="مبيعات">${x.sales}</td><td data-label="خدمات">${x.services}</td><td data-label="شكاوى">${x.complaints}</td><td data-label="أخطاء">${x.errors}</td><td data-label="نظام">${x.systemCases}</td><td data-label="متابعة">${x.followups}</td><td data-label="دوام">${esc(x.attendance)}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="إجراء"><button class="mini-btn danger" data-delete="daily" data-id="${x.id}">حذف</button></td></tr>`).join('')||`<tr><td colspan="11" class="empty-row">لا توجد متابعات حتى الآن</td></tr>`;
+  body.innerHTML=state.daily.map(x=>`<tr><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}</td><td data-label="مبيعات">${x.sales}</td><td data-label="خدمات">${x.services}</td><td data-label="شكاوى">${x.complaints}</td><td data-label="أخطاء">${x.errors}</td><td data-label="نظام">${x.systemCases}</td><td data-label="دوام">${esc(x.attendance)}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="إجراء" class="row-actions">${rowActionButtons('daily',x.id)}</td></tr>`).join('')||`<tr><td colspan="10" class="empty-row">لا توجد متابعات حتى الآن</td></tr>`;
 }
 
 document.getElementById('caseForm').addEventListener('submit',e=>{
-  e.preventDefault(); const x=formObj(e.currentTarget);x.id=uid();x.caseNo=state.cases.length?Math.max(...state.cases.map(c=>n(c.caseNo)))+1:1;x.createdAt=Date.now();state.cases.unshift(x);save();renderCases();renderDashboard();resetKeepDate(e.currentTarget);toast(`تم حفظ الحالة #${x.caseNo}`);
+  e.preventDefault(); const form=e.currentTarget; const x=formObj(form);
+  const editingId=editState.cases;
+  if(editingId){
+    const existing=state.cases.find(r=>r.id===editingId);
+    Object.assign(existing,x);existing.updatedAt=Date.now();
+    editState.cases=null;delete form.dataset.editingId;
+    save();renderCases();renderDashboard();resetKeepDate(form);fillEditButtons(form,'case');toast(`تم تحديث الحالة #${existing.caseNo}`);
+  }else{
+    x.id=uid();x.caseNo=state.cases.length?Math.max(...state.cases.map(c=>n(c.caseNo)))+1:1;x.createdAt=Date.now();state.cases.unshift(x);
+    save();renderCases();renderDashboard();resetKeepDate(form);toast(`تم حفظ الحالة #${x.caseNo}`);
+  }
 });
+document.getElementById('caseCancelEditBtn').addEventListener('click',()=>{
+  const form=document.getElementById('caseForm');editState.cases=null;delete form.dataset.editingId;resetKeepDate(form);fillEditButtons(form,'case');
+});
+function editCase(id){
+  const rec=state.cases.find(x=>x.id===id);if(!rec)return;
+  const form=document.getElementById('caseForm');
+  ['date','employee','operation','classification','description','employeeAction','supervisor','status','ticket','training','finalAction','result'].forEach(k=>{if(form.elements[k]) form.elements[k].value=rec[k]??'';});
+  editState.cases=id;form.dataset.editingId=id;fillEditButtons(form,'case');
+  switchView('cases');form.scrollIntoView({behavior:'smooth',block:'start'});
+}
 document.getElementById('caseSearch').addEventListener('input',renderCases);
 function renderCases(){
   const q=document.getElementById('caseSearch').value.trim().toLowerCase();
-  const rows=state.cases.filter(x=>!q||JSON.stringify(x).toLowerCase().includes(q)).map(x=>`<tr><td data-label="#">#${x.caseNo}</td><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}</td><td data-label="العملية">${esc(x.operation)}</td><td data-label="التصنيف">${esc(x.classification)}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="تدريب">${esc(x.training)}</td><td data-label="إجراء"><button class="mini-btn danger" data-delete="cases" data-id="${x.id}">حذف</button></td></tr>`).join('');
+  const rows=state.cases.filter(x=>!q||JSON.stringify(x).toLowerCase().includes(q)).map(x=>`<tr><td data-label="#">#${x.caseNo}</td><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}</td><td data-label="العملية">${esc(x.operation)}</td><td data-label="التصنيف">${esc(x.classification)}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="تدريب">${esc(x.training)}</td><td data-label="إجراء" class="row-actions">${rowActionButtons('cases',x.id)}</td></tr>`).join('');
   document.getElementById('casesBody').innerHTML=rows||`<tr><td colspan="8" class="empty-row">لا توجد حالات مطابقة</td></tr>`;
 }
 
@@ -211,28 +364,175 @@ function renderKnowledge(){
 document.getElementById('knowledgeSearch').addEventListener('input',renderKnowledge);
 
 document.getElementById('offerForm').addEventListener('submit',e=>{
-  e.preventDefault();const x=formObj(e.currentTarget);x.id=uid();x.createdAt=Date.now();state.offers.unshift(x);save();renderOffers();e.currentTarget.reset();toast('تم حفظ العرض');
+  e.preventDefault();const form=e.currentTarget;const x=formObj(form);
+  const editingId=editState.offers;
+  if(editingId){
+    const existing=state.offers.find(r=>r.id===editingId);
+    Object.assign(existing,x);existing.updatedAt=Date.now();
+    editState.offers=null;delete form.dataset.editingId;
+    save();renderOffers();fillEditButtons(form,'offer');form.reset();toast('تم تحديث العرض');
+  }else{
+    x.id=uid();x.createdAt=Date.now();state.offers.unshift(x);
+    save();renderOffers();form.reset();toast('تم حفظ العرض');
+  }
 });
+document.getElementById('offerCancelEditBtn').addEventListener('click',()=>{
+  const form=document.getElementById('offerForm');editState.offers=null;delete form.dataset.editingId;form.reset();fillEditButtons(form,'offer');
+});
+function editOffer(id){
+  const rec=state.offers.find(x=>x.id===id);if(!rec)return;
+  const form=document.getElementById('offerForm');
+  ['name','status','startDate','endDate','segment','business','product','verification','condition','note'].forEach(k=>{if(form.elements[k]) form.elements[k].value=rec[k]??'';});
+  editState.offers=id;form.dataset.editingId=id;fillEditButtons(form,'offer');
+  switchView('offers');form.scrollIntoView({behavior:'smooth',block:'start'});
+}
 function renderOffers(){
-  document.getElementById('offersBody').innerHTML=state.offers.map(x=>`<tr><td data-label="العرض"><strong>${esc(x.name)}</strong></td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="من">${fmtDate(x.startDate)}</td><td data-label="إلى">${fmtDate(x.endDate)}</td><td data-label="العميل">${esc(x.segment||'—')}</td><td data-label="أعمال">${esc(x.business)}</td><td data-label="المنتج">${esc(x.product||'—')}</td><td data-label="إجراء"><button class="mini-btn danger" data-delete="offers" data-id="${x.id}">حذف</button></td></tr>`).join('')||`<tr><td colspan="8" class="empty-row">لا توجد عروض مضافة بعد</td></tr>`;
+  document.getElementById('offersBody').innerHTML=state.offers.map(x=>`<tr><td data-label="العرض"><strong>${esc(x.name)}</strong></td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="من">${fmtDate(x.startDate)}</td><td data-label="إلى">${fmtDate(x.endDate)}</td><td data-label="العميل">${esc(x.segment||'—')}</td><td data-label="أعمال">${esc(x.business)}</td><td data-label="المنتج">${esc(x.product||'—')}</td><td data-label="إجراء" class="row-actions">${rowActionButtons('offers',x.id)}</td></tr>`).join('')||`<tr><td colspan="8" class="empty-row">لا توجد عروض مضافة بعد</td></tr>`;
 }
 
 const closingForm=document.getElementById('closingForm');
 function calcClosing(){
-  const f=formObj(closingForm);const actual=n(f.cash)+n(f.card)+n(f.other), diff=actual-n(f.systemTotal);let status='مطابق';if(diff!==0)status=Math.abs(diff)<=1?'فرق بسيط':'مراجعة عاجلة';
-  document.getElementById('actualPreview').textContent=money(actual);document.getElementById('diffPreview').textContent=money(diff);const s=document.getElementById('closingStatusPreview');s.textContent=status;s.className=`badge ${badgeClass(status)}`;return{actual,diff,status};
+  const f=formObj(closingForm);
+  const t=computeClosingTotals(f);
+  const status=closingStatus(t.difference);
+  document.getElementById('kaakoPreview').textContent=money(t.kaakoTotal);
+  document.getElementById('requiredCashPreview').textContent=money(t.requiredCash);
+  document.getElementById('diffPreview').textContent=money(t.difference);
+  const s=document.getElementById('closingStatusPreview');s.textContent=status;s.className=`badge ${diffBadgeClass(t.difference)}`;
+  return {...t,status};
 }
 closingForm.addEventListener('input',calcClosing);
-closingForm.addEventListener('submit',e=>{e.preventDefault();const x=formObj(e.currentTarget);Object.assign(x,calcClosing());['systemTotal','cash','card','other'].forEach(k=>x[k]=n(x[k]));x.id=uid();x.createdAt=Date.now();state.closings.unshift(x);save();renderClosings();renderDashboard();resetKeepDate(e.currentTarget);calcClosing();toast('تم حفظ إغلاق الشفت');});
-function renderClosings(){document.getElementById('closingBody').innerHTML=state.closings.map(x=>`<tr><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}</td><td data-label="الشفت">${esc(x.shift)}</td><td data-label="النظام">${money(x.systemTotal)}</td><td data-label="الفعلي">${money(x.actual)}</td><td data-label="الفرق">${money(x.diff)}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="إجراء"><button class="mini-btn danger" data-delete="closings" data-id="${x.id}">حذف</button></td></tr>`).join('')||`<tr><td colspan="8" class="empty-row">لا توجد إغلاقات مسجلة</td></tr>`;}
+closingForm.addEventListener('submit',e=>{
+  const form=e.currentTarget;e.preventDefault();const x=formObj(form);
+  ['paymentTotal','salesTotal','rechargeTotal','bss','spanTotal','actualCash'].forEach(k=>x[k]=n(x[k]));
+  Object.assign(x,calcClosing());
+  const editingId=editState.closings;
+  if(editingId){
+    const existing=state.closings.find(r=>r.id===editingId);
+    Object.assign(existing,x);existing.updatedAt=Date.now();
+    editState.closings=null;delete form.dataset.editingId;
+    save();renderClosings();renderDashboard();resetKeepDate(form);calcClosing();fillEditButtons(form,'closing');toast('تم تحديث إغلاق الشفت');
+  }else{
+    x.id=uid();x.createdAt=Date.now();state.closings.unshift(x);
+    save();renderClosings();renderDashboard();resetKeepDate(form);calcClosing();toast('تم حفظ إغلاق الشفت');
+  }
+  autofillDailySales(); // a saved/updated closing may change what daily-tracking should show
+});
+document.getElementById('closingCancelEditBtn').addEventListener('click',()=>{
+  const form=closingForm;editState.closings=null;delete form.dataset.editingId;resetKeepDate(form);calcClosing();fillEditButtons(form,'closing');
+});
+function editClosing(id){
+  const rec=state.closings.find(x=>x.id===id);if(!rec)return;
+  const form=closingForm;
+  ['date','employee','shift','paymentTotal','salesTotal','rechargeTotal','bss','spanTotal','actualCash','notes'].forEach(k=>{if(form.elements[k]) form.elements[k].value=rec[k]??'';});
+  editState.closings=id;form.dataset.editingId=id;calcClosing();fillEditButtons(form,'closing');
+  switchView('closing');form.scrollIntoView({behavior:'smooth',block:'start'});
+}
+// Renders one legacy field as "label: value" if the old record actually has it, else ''.
+const legacyLine=(label,val)=>val===undefined||val===null||val===''?'':`<div>${esc(label)}: ${money(val)}</div>`;
+function renderClosings(){
+  document.getElementById('closingBody').innerHTML=state.closings.map(raw=>{
+    const x=normalizeClosing(raw);
+    if(x.isLegacy){
+      const l=x.legacy;
+      const required=legacyLine('systemTotal',l.systemTotal)||'غير متوفر';
+      const actual=[legacyLine('cash',l.cash),legacyLine('card',l.card),legacyLine('other',l.other),legacyLine('actual',l.actual)].join('')||'غير متوفر';
+      const diff=legacyLine('diff',l.diff)||'غير متوفر';
+      return `<tr class="legacy-row"><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}<div><span class="badge neutral">سجل بالنظام القديم</span></div></td><td data-label="الشفت">${esc(x.shift)}</td><td data-label="المطلوب">${required}</td><td data-label="الفعلي">${actual}</td><td data-label="الفرق">${diff}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="إجراء" class="row-actions">${rowActionButtons('closings',raw.id)}</td></tr>`;
+    }
+    return `<tr><td data-label="التاريخ">${fmtDate(x.date)}</td><td data-label="الموظف">${esc(x.employee)}</td><td data-label="الشفت">${esc(x.shift)}</td><td data-label="المطلوب">${naOr(x.requiredCash)}</td><td data-label="الفعلي">${naOr(x.actualCash)}</td><td data-label="الفرق">${naOr(x.difference)}</td><td data-label="الحالة"><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></td><td data-label="إجراء" class="row-actions">${rowActionButtons('closings',raw.id)}</td></tr>`;
+  }).join('')||`<tr><td colspan="8" class="empty-row">لا توجد إغلاقات مسجلة</td></tr>`;
+}
 
-document.getElementById('employeeForm').addEventListener('submit',e=>{e.preventDefault();const x=formObj(e.currentTarget);x.id=uid();state.employees.push(x);save();autoSelects();renderEmployees();renderDashboard();e.currentTarget.reset();toast('تمت إضافة الموظف');});
-function renderEmployees(){document.getElementById('employeeCards').innerHTML=state.employees.map(e=>`<div class="employee-card"><div><h4>${esc(e.name)}</h4><div class="employee-meta">${esc(e.shift)} · ${e.username?esc(e.username):'بدون يوزر'}${e.startDate?` · بدأ ${fmtDate(e.startDate)}`:''}</div></div><div><span class="badge ${badgeClass(e.status)}">${esc(e.status)}</span><div class="row-actions" style="margin-top:8px"><button class="mini-btn" data-toggle-employee="${e.id}">${e.status==='غير نشط'?'تفعيل':'تعطيل'}</button></div></div></div>`).join('');}
+/* ---------------------------------------------------------------------------
+ * Calculator modal (span + cash denominations) — scratch state only, not a saved record.
+ * ------------------------------------------------------------------------- */
+const CASH_DENOMS=[500,200,100,50,20,10,5,1];
+const CALC_SCRATCH_KEY='wfw430-calculator-scratch-v1';
+function loadCalcScratch(){ try{return JSON.parse(localStorage.getItem(CALC_SCRATCH_KEY))||{};}catch{return {};} }
+function saveCalcScratch(data){ try{localStorage.setItem(CALC_SCRATCH_KEY,JSON.stringify(data));}catch{/* ignore quota errors */} }
+
+const calcBackdrop=document.getElementById('calcModalBackdrop');
+const calcSpanCount=document.getElementById('calcSpanCount');
+const calcSpanValue=document.getElementById('calcSpanValue');
+const calcCashBody=document.getElementById('calcCashBody');
+
+function buildCashRows(){
+  calcCashBody.innerHTML=CASH_DENOMS.map(d=>`<tr><td data-label="الفئة">${d}</td><td data-label="العدد"><input inputmode="decimal" type="number" placeholder="0" data-denom="${d}" /></td><td data-label="المجموع" data-subtotal="${d}">0.00 ر.س</td></tr>`).join('');
+}
+buildCashRows();
+
+function calcSpanTotal(){ return n(calcSpanCount.value)*n(calcSpanValue.value); }
+function calcCashTotal(){
+  let total=0;
+  calcCashBody.querySelectorAll('input[data-denom]').forEach(inp=>{
+    const d=n(inp.dataset.denom), count=n(inp.value), sub=d*count;
+    total+=sub;
+    calcCashBody.querySelector(`[data-subtotal="${d}"]`).textContent=money(sub);
+  });
+  return total;
+}
+function renderCalcTotals(){
+  document.getElementById('calcSpanTotal').textContent=money(calcSpanTotal());
+  document.getElementById('calcCashTotal').textContent=money(calcCashTotal());
+}
+function persistCalcScratch(){
+  const denoms={};calcCashBody.querySelectorAll('input[data-denom]').forEach(inp=>{denoms[inp.dataset.denom]=inp.value;});
+  saveCalcScratch({spanCount:calcSpanCount.value,spanValue:calcSpanValue.value,denoms});
+}
+function restoreCalcScratch(){
+  const s=loadCalcScratch();
+  if(s.spanCount!==undefined) calcSpanCount.value=s.spanCount;
+  if(s.spanValue!==undefined) calcSpanValue.value=s.spanValue;
+  if(s.denoms) calcCashBody.querySelectorAll('input[data-denom]').forEach(inp=>{ if(s.denoms[inp.dataset.denom]!==undefined) inp.value=s.denoms[inp.dataset.denom]; });
+  renderCalcTotals();
+}
+document.querySelector('.modal-body').addEventListener('input',()=>{renderCalcTotals();persistCalcScratch();});
+
+function openCalculator(){ restoreCalcScratch();calcBackdrop.hidden=false;calcSpanCount.focus(); }
+function closeCalculator(){ calcBackdrop.hidden=true; }
+document.getElementById('openCalculatorBtn').addEventListener('click',openCalculator);
+document.getElementById('calcCloseBtn').addEventListener('click',closeCalculator);
+calcBackdrop.addEventListener('click',e=>{ if(e.target===calcBackdrop) closeCalculator(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !calcBackdrop.hidden) closeCalculator(); });
+document.getElementById('useSpanTotalBtn').addEventListener('click',()=>{
+  closingForm.elements.spanTotal.value=calcSpanTotal()||'';calcClosing();closeCalculator();toast('تم استخدام إجمالي الإسبان');
+});
+document.getElementById('useCashTotalBtn').addEventListener('click',()=>{
+  closingForm.elements.actualCash.value=calcCashTotal()||'';calcClosing();closeCalculator();toast('تم استخدام إجمالي الكاش');
+});
+
+document.getElementById('employeeForm').addEventListener('submit',e=>{
+  const form=e.currentTarget;e.preventDefault();const x=formObj(form);
+  const editingId=editState.employees;
+  if(editingId){
+    const existing=state.employees.find(r=>r.id===editingId);
+    Object.assign(existing,x);existing.updatedAt=Date.now();
+    editState.employees=null;delete form.dataset.editingId;
+    save();autoSelects();renderEmployees();renderDashboard();fillEditButtons(form,'employee');form.reset();toast('تم تحديث بيانات الموظف');
+  }else{
+    x.id=uid();state.employees.push(x);
+    save();autoSelects();renderEmployees();renderDashboard();form.reset();toast('تمت إضافة الموظف');
+  }
+});
+document.getElementById('employeeCancelEditBtn').addEventListener('click',()=>{
+  const form=document.getElementById('employeeForm');editState.employees=null;delete form.dataset.editingId;form.reset();fillEditButtons(form,'employee');
+});
+function editEmployee(id){
+  const rec=state.employees.find(x=>x.id===id);if(!rec)return;
+  const form=document.getElementById('employeeForm');
+  ['name','username','shift','status','startDate','note'].forEach(k=>{if(form.elements[k]) form.elements[k].value=rec[k]??'';});
+  editState.employees=id;form.dataset.editingId=id;fillEditButtons(form,'employee');
+  switchView('employees');form.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function renderEmployees(){document.getElementById('employeeCards').innerHTML=state.employees.map(e=>`<div class="employee-card"><div><h4>${esc(e.name)}</h4><div class="employee-meta">${esc(e.shift)} · ${e.username?esc(e.username):'بدون يوزر'}${e.startDate?` · بدأ ${fmtDate(e.startDate)}`:''}</div></div><div><span class="badge ${badgeClass(e.status)}">${esc(e.status)}</span><div class="row-actions" style="margin-top:8px"><button class="mini-btn" data-toggle-employee="${e.id}">${e.status==='غير نشط'?'تفعيل':'تعطيل'}</button><button class="mini-btn" data-edit="employees" data-id="${e.id}">تعديل</button></div></div></div>`).join('');}
 
 document.getElementById('settingsForm').addEventListener('submit',e=>{e.preventDefault();const x=formObj(e.currentTarget);Object.keys(state.settings).forEach(k=>state.settings[k]=n(x[k]));save();renderDashboard();toast('تم حفظ الإعدادات');});
 function renderSettings(){const f=document.getElementById('settingsForm');Object.entries(state.settings).forEach(([k,v])=>{if(f.elements[k])f.elements[k].value=v;});}
 
+const editFns={daily:editDaily,cases:editCase,offers:editOffer,closings:editClosing,employees:editEmployee};
 document.addEventListener('click',e=>{
+  const ed=e.target.closest('[data-edit]');if(ed){const fn=editFns[ed.dataset.edit];if(fn)fn(ed.dataset.id);return;}
   const d=e.target.closest('[data-delete]');if(d){const type=d.dataset.delete,id=d.dataset.id;if(confirm('حذف هذا السجل؟')){state[type]=state[type].filter(x=>x.id!==id);save();renderAll();toast('تم حذف السجل');}return;}
   const t=e.target.closest('[data-toggle-employee]');if(t){const emp=state.employees.find(x=>x.id===t.dataset.toggleEmployee);if(emp){emp.status=emp.status==='غير نشط'?'نشط':'غير نشط';save();autoSelects();renderEmployees();renderDashboard();toast('تم تحديث حالة الموظف');}return;}
 });
@@ -305,7 +605,16 @@ document.getElementById('exportBackupBtn').addEventListener('click',exportBackup
 document.getElementById('importBackupInput').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const parsed=JSON.parse(await file.text());state=migrate({...cloneDeep(seed),...parsed,settings:{...seed.settings,...parsed.settings}});save();autoSelects();renderAll();toast('تم استيراد النسخة الاحتياطية');}catch{toast('ملف النسخة الاحتياطية غير صالح.','error');}e.target.value='';});
 document.getElementById('resetBtn').addEventListener('click',()=>{if(confirm('سيتم حذف جميع السجلات المحلية والعودة للبيانات الأساسية. هل أنت متأكد؟')){state=migrate(cloneDeep(seed));save();autoSelects();renderAll();toast('تمت إعادة ضبط النظام');}});
 
-function renderAll(){renderDaily();renderCases();renderKnowledge();renderOffers();renderClosings();renderEmployees();renderSettings();renderDashboard();calcClosing();}
+['daily','case','offer','closing','employee'].forEach(label=>{
+  const btn=document.getElementById(`${label}SubmitBtn`);
+  if(btn) btn.dataset.defaultLabel=btn.textContent;
+});
+function fillEditButtons(form,label){
+  const btn=document.getElementById(`${label}SubmitBtn`);
+  btn.textContent = form.dataset.editingId ? 'حفظ التعديلات' : btn.dataset.defaultLabel;
+  document.getElementById(`${label}CancelEditBtn`).hidden = !form.dataset.editingId;
+}
+function renderAll(){renderDaily();renderCases();renderKnowledge();renderOffers();renderClosings();renderEmployees();renderSettings();renderDashboard();calcClosing();autofillDailySales();}
 renderAll();
 
 if('serviceWorker' in navigator){
