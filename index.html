@@ -90,7 +90,7 @@
               </div>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>الموظف</th><th>المبيعات</th><th>الخدمات</th><th>الشكاوى</th><th>الأخطاء</th><th>حالات النظام</th><th>متابعة</th><th>الحالة</th></tr></thead>
+                  <thead><tr><th>الموظف</th><th>المبيعات</th><th>الخدمات</th><th>الشكاوى</th><th>الأخطاء</th><th>حالات النظام</th><th>الحالة</th></tr></thead>
                   <tbody id="employeePerformanceBody"></tbody>
                 </table>
               </div>
@@ -117,23 +117,25 @@
               <div class="form-grid two">
                 <label class="field">التاريخ<input required type="date" name="date" /></label>
                 <label class="field">الموظف<select required name="employee"></select></label>
-                <label class="field">المبيعات<input required min="0" type="number" name="sales" value="0" /></label>
-                <label class="field">الخدمات<input required min="0" type="number" name="services" value="0" /></label>
-                <label class="field">الشكاوى<input required min="0" type="number" name="complaints" value="0" /></label>
-                <label class="field">الأخطاء<input required min="0" type="number" name="errors" value="0" /></label>
-                <label class="field">حالات النظام<input required min="0" type="number" name="systemCases" value="0" /></label>
-                <label class="field">متابعة عميل<input required min="0" type="number" name="followups" value="0" /></label>
+                <label class="field">المبيعات<input required inputmode="decimal" type="number" name="sales" placeholder="0" /><small class="field-hint" id="salesAutoHint" hidden>معبأ تلقائيًا من إغلاق الشفت</small></label>
+                <label class="field">الخدمات<input required inputmode="decimal" type="number" name="services" placeholder="0" /></label>
+                <label class="field">الشكاوى<input required inputmode="decimal" type="number" name="complaints" placeholder="0" /></label>
+                <label class="field">الأخطاء<input required inputmode="decimal" type="number" name="errors" placeholder="0" /></label>
+                <label class="field">حالات النظام<input required inputmode="decimal" type="number" name="systemCases" placeholder="0" /></label>
                 <label class="field">التزام / دوام<select name="attendance"><option>مكتمل</option><option>ناقص</option><option>غياب</option><option>إجازة</option></select></label>
                 <label class="field">الحالة<select name="status"><option>مكتملة</option><option>قيد المتابعة</option><option>تحتاج مراجعة</option></select></label>
               </div>
               <label class="field">ملاحظة المشرف<textarea name="note" rows="3" placeholder="ملاحظة مختصرة وواضحة"></textarea></label>
               <label class="field">مصدر البيانات<input name="source" placeholder="مثال: النظام / تقرير المبيعات" /></label>
-              <button class="primary-btn full" type="submit">حفظ المتابعة</button>
+              <div class="row-actions">
+                <button class="primary-btn full" id="dailySubmitBtn" type="submit">حفظ المتابعة</button>
+                <button class="ghost-btn full" id="dailyCancelEditBtn" type="button" hidden>إلغاء التعديل</button>
+              </div>
             </form>
 
             <article class="card">
               <div class="card-head"><div><h3>السجلات</h3><p>الأحدث أولًا.</p></div><button class="ghost-btn pdf-btn" type="button" data-print-view="daily">تصدير التقرير PDF</button></div>
-              <div class="table-wrap tall"><table><thead><tr><th>التاريخ</th><th>الموظف</th><th>مبيعات</th><th>خدمات</th><th>شكاوى</th><th>أخطاء</th><th>نظام</th><th>متابعة</th><th>دوام</th><th>الحالة</th><th></th></tr></thead><tbody id="dailyBody"></tbody></table></div>
+              <div class="table-wrap tall"><table><thead><tr><th>التاريخ</th><th>الموظف</th><th>مبيعات</th><th>خدمات</th><th>شكاوى</th><th>أخطاء</th><th>نظام</th><th>دوام</th><th>الحالة</th><th></th></tr></thead><tbody id="dailyBody"></tbody></table></div>
             </article>
           </div>
         </section>
@@ -160,7 +162,10 @@
               </div>
               <label class="field">الإجراء النهائي<textarea name="finalAction" rows="2"></textarea></label>
               <label class="field">النتيجة<input name="result" /></label>
-              <button class="primary-btn full" type="submit">حفظ الحالة</button>
+              <div class="row-actions">
+                <button class="primary-btn full" id="caseSubmitBtn" type="submit">حفظ الحالة</button>
+                <button class="ghost-btn full" id="caseCancelEditBtn" type="button" hidden>إلغاء التعديل</button>
+              </div>
             </form>
             <article class="card">
               <div class="card-head"><div><h3>الحالات المسجلة</h3><p>مع بحث سريع بالموظف أو العملية أو التصنيف.</p></div><button class="ghost-btn pdf-btn" type="button" data-print-view="cases">تصدير التقرير PDF</button></div>
@@ -197,7 +202,10 @@
               </div>
               <label class="field">شرط الشركة / الجهة<input name="condition" /></label>
               <label class="field">ملاحظات<textarea name="note" rows="2"></textarea></label>
-              <button class="primary-btn full" type="submit">حفظ العرض</button>
+              <div class="row-actions">
+                <button class="primary-btn full" id="offerSubmitBtn" type="submit">حفظ العرض</button>
+                <button class="ghost-btn full" id="offerCancelEditBtn" type="button" hidden>إلغاء التعديل</button>
+              </div>
             </form>
             <article class="card">
               <div class="card-head"><div><h3>العروض</h3><p>تحقق من الحالة والتاريخ قبل الوعد للعميل.</p></div><button class="ghost-btn pdf-btn" type="button" data-print-view="offers">تصدير التقرير PDF</button></div>
@@ -211,26 +219,36 @@
           <div class="section-heading"><h2>إغلاق الشفت</h2><p>احسب الفرق قبل التسليم لتقليل العجز والأخطاء المحاسبية.</p></div>
           <div class="grid-form-table">
             <form class="card form-card" id="closingForm">
-              <h3>تقفيلة جديدة</h3>
+              <div class="card-head" style="margin-bottom:6px">
+                <h3 style="margin:0">تقفيلة جديدة</h3>
+                <button class="ghost-btn" type="button" id="openCalculatorBtn">🧮 فتح الحاسبة</button>
+              </div>
               <div class="form-grid two">
                 <label class="field">التاريخ<input required type="date" name="date" /></label>
                 <label class="field">الموظف<select required name="employee"></select></label>
                 <label class="field">الشفت<select name="shift"><option>صباحي</option><option>مسائي</option></select></label>
-                <label class="field">إجمالي النظام<input required step="0.01" type="number" name="systemTotal" value="0" /></label>
-                <label class="field">نقد<input required step="0.01" type="number" name="cash" value="0" /></label>
-                <label class="field">شبكة<input required step="0.01" type="number" name="card" value="0" /></label>
-                <label class="field">تحويل / أخرى<input required step="0.01" type="number" name="other" value="0" /></label>
+                <label class="field">إجمالي السداد<input required inputmode="decimal" type="number" name="paymentTotal" placeholder="0" /></label>
+                <label class="field">إجمالي المبيعات<input required inputmode="decimal" type="number" name="salesTotal" placeholder="0" /></label>
+                <label class="field">إجمالي الشحن<input required inputmode="decimal" type="number" name="rechargeTotal" placeholder="0" /></label>
+                <label class="field">BSS<input required inputmode="decimal" type="number" name="bss" placeholder="0" /></label>
+                <label class="field">إجمالي الإسبان<input required inputmode="decimal" type="number" name="spanTotal" placeholder="0" /></label>
+                <label class="field">الكاش الفعلي لديك<input required inputmode="decimal" type="number" name="actualCash" placeholder="0" /></label>
               </div>
+              <label class="field">ملاحظات<textarea name="notes" rows="2"></textarea></label>
               <div class="closing-preview">
-                <div><span>الإجمالي الفعلي</span><strong id="actualPreview">0.00 ر.س</strong></div>
-                <div><span>الفرق</span><strong id="diffPreview">0.00 ر.س</strong></div>
+                <div><span>إجمالي الكاكو</span><strong id="kaakoPreview">0.00 ر.س</strong></div>
+                <div><span>الكاش المطلوب</span><strong id="requiredCashPreview">0.00 ر.س</strong></div>
+                <div><span>العجز/الفائض</span><strong id="diffPreview">0.00 ر.س</strong></div>
                 <div><span>الحالة</span><strong id="closingStatusPreview" class="badge neutral">مطابق</strong></div>
               </div>
-              <button class="primary-btn full" type="submit">حفظ الإغلاق</button>
+              <div class="row-actions">
+                <button class="primary-btn full" id="closingSubmitBtn" type="submit">حفظ الإغلاق</button>
+                <button class="ghost-btn full" id="closingCancelEditBtn" type="button" hidden>إلغاء التعديل</button>
+              </div>
             </form>
             <article class="card">
-              <div class="card-head"><div><h3>سجل الإغلاقات</h3><p>الفرق = الإجمالي الفعلي − إجمالي النظام.</p></div><button class="ghost-btn pdf-btn" type="button" data-print-view="closing">تصدير التقرير PDF</button></div>
-              <div class="table-wrap tall"><table><thead><tr><th>التاريخ</th><th>الموظف</th><th>الشفت</th><th>النظام</th><th>الفعلي</th><th>الفرق</th><th>الحالة</th><th></th></tr></thead><tbody id="closingBody"></tbody></table></div>
+              <div class="card-head"><div><h3>سجل الإغلاقات</h3><p>الكاش المطلوب = الكاكو − الإسبان. العجز/الفائض = الكاش الفعلي − الكاش المطلوب.</p></div><button class="ghost-btn pdf-btn" type="button" data-print-view="closing">تصدير التقرير PDF</button></div>
+              <div class="table-wrap tall"><table><thead><tr><th>التاريخ</th><th>الموظف</th><th>الشفت</th><th>المطلوب</th><th>الفعلي</th><th>الفرق</th><th>الحالة</th><th></th></tr></thead><tbody id="closingBody"></tbody></table></div>
             </article>
           </div>
         </section>
@@ -249,7 +267,10 @@
                 <label class="field">تاريخ البدء<input type="date" name="startDate" /></label>
               </div>
               <label class="field">ملاحظات<textarea name="note" rows="2"></textarea></label>
-              <button class="primary-btn full" type="submit">إضافة الموظف</button>
+              <div class="row-actions">
+                <button class="primary-btn full" id="employeeSubmitBtn" type="submit">إضافة الموظف</button>
+                <button class="ghost-btn full" id="employeeCancelEditBtn" type="button" hidden>إلغاء التعديل</button>
+              </div>
             </form>
             <article class="card">
               <div class="card-head"><div><h3>الفريق</h3><p>يمكن تعطيل الموظف بدون حذف سجلاته القديمة.</p></div><button class="ghost-btn pdf-btn" type="button" data-print-view="employees">تصدير التقرير PDF</button></div>
@@ -296,6 +317,37 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <div class="modal-backdrop" id="calcModalBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="calcModalTitle">
+      <div class="modal-head">
+        <h3 id="calcModalTitle">الحاسبة</h3>
+        <button class="icon-btn" type="button" id="calcCloseBtn" aria-label="إغلاق الحاسبة">×</button>
+      </div>
+      <div class="modal-body">
+        <section class="calc-section">
+          <h4>حساب الإسبان</h4>
+          <div class="form-grid two">
+            <label class="field">العدد<input inputmode="decimal" type="number" id="calcSpanCount" placeholder="0" /></label>
+            <label class="field">قيمة الإسبان<input inputmode="decimal" type="number" id="calcSpanValue" placeholder="0" /></label>
+          </div>
+          <div class="calc-total"><span>المجموع</span><strong id="calcSpanTotal">0.00 ر.س</strong></div>
+          <button class="ghost-btn full" type="button" id="useSpanTotalBtn">استخدام إجمالي الإسبان</button>
+        </section>
+
+        <section class="calc-section">
+          <h4>حساب الكاش</h4>
+          <div class="table-wrap"><table>
+            <thead><tr><th>الفئة</th><th>العدد</th><th>المجموع</th></tr></thead>
+            <tbody id="calcCashBody"></tbody>
+          </table></div>
+          <div class="calc-total"><span>إجمالي الكاش</span><strong id="calcCashTotal">0.00 ر.س</strong></div>
+          <button class="ghost-btn full" type="button" id="useCashTotalBtn">استخدام إجمالي الكاش</button>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
