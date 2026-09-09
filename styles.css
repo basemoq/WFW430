@@ -25,3 +25,61 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{min-h
 @media(max-width:1180px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}.knowledge-grid{grid-template-columns:repeat(2,1fr)}.grid-form-table{grid-template-columns:340px minmax(0,1fr)}}
 @media(max-width:900px){.app-shell{grid-template-columns:1fr}.sidebar{position:fixed;right:0;top:0;width:270px;transform:translateX(105%);transition:.25s;box-shadow:-20px 0 40px rgba(16,24,40,.22)}.sidebar.open{transform:translateX(0)}.mobile-only{display:inline-grid;place-items:center}.topbar{padding:0 14px;height:76px}.topbar h1{font-size:19px}.today-chip{display:none}.content{padding:16px}.grid-form-table,.settings-grid{grid-template-columns:1fr}.form-card{position:static}.knowledge-grid{grid-template-columns:1fr}.split{align-items:stretch;flex-direction:column}.wide,.compact-field{max-width:none}}
 @media(max-width:600px){.kpi-grid{grid-template-columns:1fr 1fr;gap:8px}.kpi{padding:13px;min-height:98px}.kpi .value{font-size:23px}.form-grid.two{grid-template-columns:1fr}.employee-cards{grid-template-columns:1fr}.closing-preview{grid-template-columns:1fr}.top-actions .primary-btn{display:none}.content{padding:12px}.card{padding:14px;border-radius:14px}.section-heading{margin-bottom:14px}}
+
+/* v2 — mobile drawer + PDF printing */
+.print-only{display:none}
+.sidebar-close{margin-right:auto;border:0;background:transparent;color:#fff;font-size:30px;line-height:1;width:38px;height:38px;border-radius:9px}
+.sidebar-close:hover{background:#1d2939}
+.sidebar-backdrop{display:none}
+.pdf-btn{white-space:nowrap}
+
+@media(max-width:900px){
+  .sidebar{visibility:hidden;pointer-events:none}
+  .sidebar.open{visibility:visible;pointer-events:auto;transform:translateX(0)}
+  .sidebar-backdrop{display:block;position:fixed;inset:0;background:rgba(16,24,40,.46);opacity:0;pointer-events:none;transition:opacity .2s;z-index:19}
+  body.menu-open{overflow:hidden}
+  body.menu-open .sidebar-backdrop{opacity:1;pointer-events:auto}
+  .brand{position:relative;padding-top:4px}
+  .sidebar-close{display:inline-grid;place-items:center;position:absolute;left:0;top:0}
+  .top-actions{gap:6px}
+  .top-actions .pdf-btn{display:inline-flex;padding:8px 10px}
+}
+
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+  html,body{background:#fff!important;color:#000!important}
+  body{font-family:Tahoma,Arial,sans-serif;direction:rtl}
+  .sidebar,.sidebar-backdrop,.topbar,.toast,.form-card,.search-input,.stack-actions,.note-box,button,.mobile-only{display:none!important}
+  .app-shell{display:block!important;min-height:auto!important}
+  .main{display:block!important}
+  .print-only{display:block!important}
+  .print-header{padding:0 0 10px;margin:0 0 12px;border-bottom:2px solid #101828;text-align:right}
+  .print-header strong{display:block;font-size:18pt}
+  .print-header span{display:block;font-size:13pt;font-weight:700;margin-top:2px}
+  .print-header small{display:block;font-size:9pt;color:#475467;margin-top:2px}
+  .content{padding:0!important;max-width:none!important;margin:0!important}
+  .view{display:none!important}
+  .view.active{display:block!important}
+  .section-heading{margin:0 0 12px!important}
+  .section-heading h2{font-size:16pt}
+  .section-heading p{font-size:9pt}
+  .section-heading .field{display:none!important}
+  .grid-form-table,.settings-grid,.grid-2{display:block!important}
+  .card,.knowledge-card,.employee-card,.kpi{box-shadow:none!important;border:1px solid #d0d5dd!important;break-inside:avoid;background:#fff!important}
+  .card{margin-bottom:10px;padding:10px!important}
+  .kpi-grid{grid-template-columns:repeat(4,1fr)!important;gap:7px!important;margin-bottom:10px!important}
+  .kpi{min-height:70px!important;padding:9px!important}
+  .kpi::after{display:none!important}
+  .kpi .value{font-size:16pt!important;margin-top:4px!important}
+  .table-wrap,.table-wrap.tall{overflow:visible!important;max-height:none!important;border:0!important}
+  table{width:100%!important;min-width:0!important;border-collapse:collapse!important;table-layout:auto}
+  th,td{font-size:8pt!important;padding:5px 4px!important;white-space:normal!important;border:1px solid #d0d5dd!important;color:#000!important}
+  th{position:static!important;background:#f2f4f7!important}
+  td:last-child:has(button),th:last-child:empty{display:none!important}
+  .badge{border:1px solid #d0d5dd;background:#fff!important;color:#000!important;padding:2px 5px!important}
+  .knowledge-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
+  .knowledge-card{padding:10px!important}
+  .employee-cards{grid-template-columns:repeat(2,1fr)!important}
+  .row-actions{display:none!important}
+  a{color:#000!important;text-decoration:none!important}
+}

@@ -42,17 +42,34 @@ function save(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); }
 function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),2200); }
 
 const viewTitles={dashboard:'لوحة التحكم',daily:'المتابعة اليومية',cases:'الحالات والأخطاء',knowledge:'قاعدة المعرفة',offers:'العروض',closing:'إغلاق الشفت',employees:'الموظفون',settings:'الإعدادات'};
+const sidebar=document.getElementById('sidebar');
+const menuBtn=document.getElementById('menuBtn');
+const sidebarCloseBtn=document.getElementById('sidebarCloseBtn');
+const sidebarBackdrop=document.getElementById('sidebarBackdrop');
+
+function setMenu(open){
+  const shouldOpen=Boolean(open) && window.matchMedia('(max-width: 900px)').matches;
+  sidebar.classList.toggle('open',shouldOpen);
+  document.body.classList.toggle('menu-open',shouldOpen);
+  menuBtn.setAttribute('aria-expanded',String(shouldOpen));
+}
+
 function switchView(name){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
   document.getElementById('viewTitle').textContent=viewTitles[name]||'WFW430';
-  document.getElementById('sidebar').classList.remove('open');
+  setMenu(false);
   if(name==='dashboard') renderDashboard();
 }
 
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
 document.querySelectorAll('[data-view-jump]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.viewJump)));
-document.getElementById('menuBtn').addEventListener('click',()=>document.getElementById('sidebar').classList.toggle('open'));
+menuBtn.addEventListener('click',()=>setMenu(!sidebar.classList.contains('open')));
+sidebarCloseBtn.addEventListener('click',()=>setMenu(false));
+sidebarBackdrop.addEventListener('click',()=>setMenu(false));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')setMenu(false);});
+window.addEventListener('resize',()=>{if(window.innerWidth>900)setMenu(false);});
+setMenu(false);
 
 document.getElementById('todayChip').textContent=new Intl.DateTimeFormat('ar-SA',{weekday:'long',year:'numeric',month:'long',day:'numeric'}).format(new Date());
 
@@ -175,15 +192,31 @@ document.addEventListener('click',e=>{
   const t=e.target.closest('[data-toggle-employee]');if(t){const emp=state.employees.find(x=>x.id===t.dataset.toggleEmployee);if(emp){emp.status=emp.status==='غير نشط'?'نشط':'غير نشط';save();autoSelects();renderEmployees();renderDashboard();toast('تم تحديث حالة الموظف');}return;}
 });
 
-function csvCell(v){const s=String(v??'');return `"${s.replace(/"/g,'""')}"`;}
 function download(name,content,type='text/plain'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;document.body.appendChild(a);a.click();URL.revokeObjectURL(a.href);a.remove();}
-const csvMaps={
-  daily:[['التاريخ','date'],['الموظف','employee'],['المبيعات','sales'],['الخدمات','services'],['الشكاوى','complaints'],['الأخطاء','errors'],['حالات النظام','systemCases'],['متابعة عميل','followups'],['الدوام','attendance'],['الحالة','status'],['ملاحظة المشرف','note'],['مصدر البيانات','source']],
-  cases:[['رقم الحالة','caseNo'],['التاريخ','date'],['الموظف','employee'],['نوع العملية','operation'],['التصنيف','classification'],['الوصف','description'],['إجراء الموظف','employeeAction'],['تدخل المشرف','supervisor'],['الإجراء النهائي','finalAction'],['التذكرة','ticket'],['النتيجة','result'],['الحالة','status'],['يحتاج تدريب','training']],
-  offers:[['اسم العرض','name'],['الحالة','status'],['تاريخ البداية','startDate'],['تاريخ النهاية','endDate'],['تصنيف العميل','segment'],['قطاع الأعمال','business'],['شرط الشركة','condition'],['الجهاز/الباقة','product'],['طريقة التحقق','verification'],['ملاحظات','note']],
-  closings:[['التاريخ','date'],['الموظف','employee'],['الشفت','shift'],['إجمالي النظام','systemTotal'],['نقد','cash'],['شبكة','card'],['أخرى','other'],['الإجمالي الفعلي','actual'],['الفرق','diff'],['الحالة','status']]
-};
-document.querySelectorAll('[data-export]').forEach(b=>b.addEventListener('click',()=>{const type=b.dataset.export,cols=csvMaps[type],rows=state[type]||[];const csv='\ufeff'+[cols.map(c=>csvCell(c[0])).join(','),...rows.map(r=>cols.map(c=>csvCell(r[c[1]])).join(','))].join('\n');download(`WFW430_${type}_${todayISO()}.csv`,csv,'text/csv;charset=utf-8');}));
+
+function activeViewName(){
+  const active=document.querySelector('.nav-item.active');
+  return active?.dataset.view || 'dashboard';
+}
+
+function printView(name=activeViewName()){
+  const previous=activeViewName();
+  if(name!==previous) switchView(name);
+  setMenu(false);
+  const title=viewTitles[name]||'تقرير';
+  document.getElementById('printHeaderTitle').textContent=title;
+  document.getElementById('printHeaderDate').textContent=`تاريخ التصدير: ${new Intl.DateTimeFormat('ar-SA',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date())}`;
+  const oldTitle=document.title;
+  document.title=`WFW430_${name}_${todayISO()}`;
+  setTimeout(()=>{
+    window.print();
+    document.title=oldTitle;
+    if(name!==previous) switchView(previous);
+  },80);
+}
+
+document.querySelectorAll('[data-print-view]').forEach(b=>b.addEventListener('click',()=>printView(b.dataset.printView)));
+document.getElementById('printCurrentBtn').addEventListener('click',()=>printView(activeViewName()));
 
 function exportBackup(){download(`WFW430_Backup_${todayISO()}.json`,JSON.stringify(state,null,2),'application/json');toast('تم تصدير النسخة الاحتياطية');}
 document.getElementById('exportBackupBtn').addEventListener('click',exportBackup);document.getElementById('settingsExportBtn').addEventListener('click',exportBackup);
