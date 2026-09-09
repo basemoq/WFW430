@@ -20,8 +20,20 @@
     flex_renewal_or_addon:'تجديد/إضافة Flex',rs_discount_attribute:'خاصية خصم RS',unknown:'غير معروف'
   };
   let analysis=null;
+  let pendingFile=null;
 
   el('cacoIntegrationDate').value=integration.todayISO();
+
+  const MANUAL_FIELDS=[
+    ['date','التاريخ',true],
+    ['time','الوقت',false],
+    ['employee','الموظف',true],
+    ['description','الوصف',true],
+    ['amount','المبلغ',true],
+    ['msisdn','رقم الجوال (MSISDN)',false],
+    ['branch','المعرض/الفرع',false],
+    ['transactionId','رقم العملية/الإيصال',false]
+  ];
 
   function resolveEmployeeName(raw){
     const matched=integration.resolveEmployee(raw);
@@ -78,7 +90,47 @@
     }).join('');
   }
   function renderBranchSummary(){
-    el('cacoBranchBody').innerHTML=Object.entries(analysis.classified.summary.branches).map(([branch,s])=>`<tr><td data-label="المعرض">${escapeHtml(branch)}</td><td data-label="العمليات">${s.transactions}</td><td data-label="مبيعات/عمليات">${formatMoney(s.salesOperationsAmount)}</td><td data-label="سداد فواتير">${formatMoney(s.invoicePaymentAmount)}</td><td data-label="غير معروف">${s.unknown+s.attributeOnly}</td></tr>`).join('')||'<tr><td colspan="5" class="empty-row">لا توجد بيانات معرض</td></tr>';
+    el('cacoBranchBody').innerHTML=Object.entries(analysis.classified.summary.branches).map(([branch,s])=>`<tr><td data-label="المعرض">${escapeHtml(branch)}</td><td data-label="العمليات">${s.transactions}</td><td data-label="مبيعات">${s.sales}</td><td data-label="خدمات">${s.operations}</td><td data-label="سداد">${s.invoicePayments}</td><td data-label="مبيعات/عمليات">${formatMoney(s.salesOperationsAmount)}</td><td data-label="سداد فواتير">${formatMoney(s.invoicePaymentAmount)}</td><td data-label="غير معروف">${s.unknown+s.attributeOnly}</td></tr>`).join('')||'<tr><td colspan="8" class="empty-row">لا توجد بيانات معرض</td></tr>';
+  }
+  function txCardHtml(row){
+    return `<div class="caco-tx-card ${row.needsReview?'review-row':''}">
+      <div class="caco-tx-top">
+        <span>الصف ${row.sourceRow}</span>
+        <span>${row.amount===null?statusBadge('غير صالح','danger'):`<span class="caco-tx-amount">${formatMoney(row.amount)}</span>`}</span>
+      </div>
+      <div class="caco-tx-desc">${escapeHtml(row.description||'—')}</div>
+      <div class="caco-tx-meta">
+        <span>${escapeHtml(typeLabels[row.transactionType]||row.transactionType)}</span>
+        <span>${escapeHtml(lineLabels[row.lineType]||row.lineType)}</span>
+        <span>${escapeHtml(row.productFamily||'—')}</span>
+        ${row.plan?`<span>${escapeHtml(row.plan)}</span>`:''}
+        ${row.simType?`<span>${escapeHtml(row.simType)}</span>`:''}
+        ${row.attributes.length?`<span>${escapeHtml(row.attributes.join('، '))}</span>`:''}
+        ${row.needsReview?statusBadge(classLabels[row.classification]||'مراجعة','warn'):statusBadge(classLabels[row.classification]||'مصنف','success')}
+      </div>
+    </div>`;
+  }
+  function renderEmployeeCards(){
+    const entries=Object.entries(analysis.classified.summary.employees);
+    el('cacoEmployeeCards').innerHTML=entries.map(([raw,s])=>{
+      const resolved=resolveEmployeeName(raw);
+      const review=s.unknown+s.attributeOnly;
+      const empRows=analysis.classified.rows.filter(row=>row.employee===raw);
+      const nameHtml=resolved?escapeHtml(resolved):`${escapeHtml(raw)} ${statusBadge('غير مربوط','warn')}`;
+      return `<div class="employee-card caco-emp-card">
+        <div class="caco-emp-head"><h4>${nameHtml}</h4><span class="badge neutral">${s.transactions} عملية</span></div>
+        <div class="caco-emp-stats">
+          <div class="caco-emp-stat"><span>مبيعات</span><strong>${s.sales} · ${formatMoney(s.salesOperationsAmount)}</strong></div>
+          <div class="caco-emp-stat"><span>خدمات/عمليات</span><strong>${s.operations} · ${formatMoney(s.salesOperationsAmount)}</strong></div>
+          <div class="caco-emp-stat"><span>سداد فواتير</span><strong>${s.invoicePayments} · ${formatMoney(s.invoicePaymentAmount)}</strong></div>
+          <div class="caco-emp-stat"><span>تحتاج مراجعة</span><strong>${review} · ${formatMoney(s.attributeAmount+s.unknownAmount)}</strong></div>
+        </div>
+        <details>
+          <summary>عرض ${empRows.length} عملية</summary>
+          <div class="caco-emp-rows">${empRows.map(txCardHtml).join('')}</div>
+        </details>
+      </div>`;
+    }).join('')||'<div class="empty-row">لا توجد بيانات موظفين</div>';
   }
   function filteredRows(){
     const filter=el('cacoResultFilter').value;
@@ -88,7 +140,8 @@
     return analysis.classified.rows;
   }
   function renderRows(){
-    el('cacoResultBody').innerHTML=filteredRows().map(row=>`<tr class="${row.needsReview?'review-row':''}">
+    const rows=filteredRows();
+    el('cacoResultBody').innerHTML=rows.map(row=>`<tr class="${row.needsReview?'review-row':''}">
       <td data-label="الصف">${row.sourceRow}</td>
       <td data-label="الموظف">${escapeHtml(resolveEmployeeName(row.employee)||row.employee||'غير محدد')}</td>
       <td data-label="الوصف" class="description-cell">${escapeHtml(row.description||'—')}</td>
@@ -101,11 +154,14 @@
       <td data-label="الخصائص">${escapeHtml(row.attributes.join('، ')||'—')}</td>
       <td data-label="المراجعة">${row.needsReview?statusBadge(classLabels[row.classification]||'مراجعة','warn'):statusBadge(classLabels[row.classification]||'مصنف','success')}</td>
     </tr>`).join('')||'<tr><td colspan="11" class="empty-row">لا توجد نتائج مطابقة للفلتر</td></tr>';
+    el('cacoResultCards').innerHTML=rows.map(txCardHtml).join('')||'<div class="empty-row">لا توجد نتائج مطابقة للفلتر</div>';
   }
   function render(){
+    el('cacoManualMapPanel').hidden=true;
     el('cacoResults').hidden=false;
     renderKpis();
     renderValidation();
+    renderEmployeeCards();
     renderEmployeeSummary();
     renderBranchSummary();
     renderRows();
@@ -116,18 +172,60 @@
       el('cacoFileStatus').textContent=`اكتمل التحليل. يوجد ${unresolved.length} اسم موظف غير مربوط؛ سيُستبعد من التكامل حتى تتم إضافته أو تعديل اليوزر في دليل الموظفين.`;
     }
   }
+  function renderManualMapPanel(parsed){
+    const options=parsed.headerRowCells.map((label,index)=>`<option value="${index}">${escapeHtml(label||`عمود ${index+1}`)}</option>`).join('');
+    el('cacoManualMapFields').innerHTML=MANUAL_FIELDS.map(([key,label,required])=>`
+      <label>${escapeHtml(label)}${required?' *':''}
+        <select data-field="${key}">
+          <option value="">— بدون ربط —</option>
+          ${options}
+        </select>
+      </label>`).join('');
+    el('cacoManualMapPanel').hidden=false;
+    el('cacoResults').hidden=true;
+  }
+  async function applyManualMap(){
+    if(!pendingFile)return;
+    const map={};
+    el('cacoManualMapFields').querySelectorAll('select[data-field]').forEach(select=>{
+      if(select.value!=='')map[select.dataset.field]=Number(select.value);
+    });
+    if(map.description===undefined||map.amount===undefined){
+      integration.showToast('يجب ربط عمودي الوصف والمبلغ على الأقل','error');
+      return;
+    }
+    try{
+      const parsed=await parser.parseFile(pendingFile,window.XLSX,{manualMap:map});
+      finishAnalysis(pendingFile,parsed);
+    }catch(error){
+      el('cacoFileStatus').textContent=error?.message||'تعذر تحليل الملف.';
+      integration.showToast('تعذر تحليل ملف CACO','error');
+    }
+  }
+  function finishAnalysis(file,parsed){
+    if(parsed.headerDetected===false){
+      analysis=null;
+      pendingFile=file;
+      el('cacoFileStatus').textContent=`تم رفع ${file.name}، لكن تعذر التعرف على الأعمدة تلقائيًا. حدد الأعمدة يدويًا أدناه.`;
+      renderManualMapPanel(parsed);
+      return;
+    }
+    const classified=classifier.classify(parsed.rows);
+    analysis={file,parsed,classified};
+    const dates=parsed.rows.map(row=>row.date).filter(Boolean);
+    if(dates.length)el('cacoIntegrationDate').value=dates[0];
+    el('cacoFileStatus').textContent=`تم تحليل ${file.name}: ${parsed.transactionCount} عملية.`;
+    render();
+  }
   async function analyzeFile(file){
     if(!file)return;
+    pendingFile=file;
     el('cacoFileStatus').textContent=`جارٍ تحليل ${file.name}…`;
     el('cacoResults').hidden=true;
+    el('cacoManualMapPanel').hidden=true;
     try{
       const parsed=await parser.parseFile(file,window.XLSX);
-      const classified=classifier.classify(parsed.rows);
-      analysis={file,parsed,classified};
-      const dates=parsed.rows.map(row=>row.date).filter(Boolean);
-      if(dates.length)el('cacoIntegrationDate').value=dates[0];
-      el('cacoFileStatus').textContent=`تم تحليل ${file.name}: ${parsed.transactionCount} عملية.`;
-      render();
+      finishAnalysis(file,parsed);
     }catch(error){
       analysis=null;
       el('cacoResults').hidden=true;
@@ -135,6 +233,7 @@
       integration.showToast('تعذر تحليل ملف CACO','error');
     }
   }
+  el('cacoManualMapApplyBtn').addEventListener('click',applyManualMap);
 
   fileInput.addEventListener('change',event=>analyzeFile(event.target.files[0]));
   el('cacoResultFilter').addEventListener('change',()=>{if(analysis)renderRows();});

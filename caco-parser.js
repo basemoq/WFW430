@@ -178,10 +178,10 @@
     const matrix=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:'',blankrows:false,raw:false});
     return parseMatrix(matrix,{...options,sheetName});
   }
-  async function parseFile(file,XLSX){
+  async function parseFile(file,XLSX,options={}){
     const name=file?.name||'';const lower=name.toLowerCase();
-    if(/\.(csv|tsv|txt)$/.test(lower))return parseMatrix(parseDelimited(await file.text(),lower.endsWith('.tsv')?'\t':undefined),{sourceName:name});
-    if(/\.(xlsx|xls|xlsm)$/.test(lower))return parseWorkbook(await file.arrayBuffer(),XLSX,{sourceName:name});
+    if(/\.(csv|tsv|txt)$/.test(lower))return parseMatrix(parseDelimited(await file.text(),lower.endsWith('.tsv')?'\t':undefined),{...options,sourceName:name});
+    if(/\.(xlsx|xls|xlsm)$/.test(lower))return parseWorkbook(await file.arrayBuffer(),XLSX,{...options,sourceName:name});
     throw new Error('صيغة الملف غير مدعومة. استخدم XLSX أو XLS أو CSV أو TSV.');
   }
   return {HEADER_ALIASES,normalizeText,parseAmount,roundMoney,parseDelimited,detectHeader,parseMatrix,parseWorkbook,parseFile,isTotalRow,dateToISO};

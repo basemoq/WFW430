@@ -74,12 +74,39 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .caco-integration-actions{display:flex;flex-direction:column;gap:10px}.caco-integration-actions .field{font-size:13px}.caco-integration-actions button{min-height:44px}
 button:disabled{cursor:not-allowed;opacity:.5}.caco-details{margin-top:0}.caco-table-head{align-items:end}.caco-table-head .field{min-width:190px}.caco-table{min-width:1320px}.caco-table .description-cell{white-space:normal;min-width:240px;line-height:1.45}.caco-table .review-row{background:var(--warn-soft)}
 
+.caco-manual-map-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:10px}
+.caco-manual-map-grid label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.caco-manual-map-grid select{min-height:38px}
+
+.caco-employee-cards{margin-bottom:0}
+.employee-card.caco-emp-card{flex-direction:column;gap:10px}
+.caco-emp-card .caco-emp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.caco-emp-card .caco-emp-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.caco-emp-card .caco-emp-stat{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.caco-emp-card .caco-emp-stat span{display:block;font-size:10px;color:var(--muted)}
+.caco-emp-card .caco-emp-stat strong{display:block;font-size:13px;margin-top:2px}
+.caco-emp-card details{border-top:1px dashed var(--line);padding-top:8px}
+.caco-emp-card summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--primary,#175cd3)}
+.caco-emp-card .caco-emp-rows{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+
+.caco-result-cards{display:none}
+.caco-tx-card{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);display:flex;flex-direction:column;gap:6px}
+.caco-tx-card.review-row{background:var(--warn-soft)}
+.caco-tx-card .caco-tx-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;font-size:12px;color:var(--muted)}
+.caco-tx-card .caco-tx-desc{font-size:13px;line-height:1.5;white-space:pre-line}
+.caco-tx-card .caco-tx-meta{display:flex;flex-wrap:wrap;gap:6px;font-size:11px}
+.caco-tx-card .caco-tx-meta span{background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px 8px}
+.caco-tx-card .caco-tx-amount{font-weight:800;font-size:14px}
+
 @media screen and (max-width:900px){
   .caco-upload-main{grid-template-columns:1fr}.caco-review-grid,.caco-summary-grid{grid-template-columns:1fr}.caco-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media screen and (max-width:600px){
   .caco-kpis{grid-template-columns:1fr 1fr}.caco-table-head{align-items:stretch;flex-direction:column}.caco-table-head .field{width:100%;min-width:0}
   .caco-table .description-cell{min-width:0}.file-drop{min-height:150px}.caco-upload{padding:12px}
+  .caco-employee-cards{grid-template-columns:1fr}
+  .caco-table-only{display:none}
+  .caco-result-cards{display:flex;flex-direction:column;gap:10px}
 }
 
 /* Calculator modal */

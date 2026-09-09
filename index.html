@@ -166,6 +166,14 @@
             <div id="cacoFileStatus" class="caco-status" role="status" aria-live="polite">لم يتم رفع ملف بعد.</div>
           </article>
 
+          <article class="card caco-manual-map no-print" id="cacoManualMapPanel" hidden>
+            <div class="card-head"><div><h3>لم يتم التعرف على الأعمدة تلقائيًا</h3><p>حدد يدويًا أي عمود من الملف يقابل كل حقل مطلوب، ثم اضغط "إعادة التحليل بالربط اليدوي".</p></div></div>
+            <div class="caco-manual-map-grid" id="cacoManualMapFields"></div>
+            <div class="row-actions">
+              <button class="primary-btn" id="cacoManualMapApplyBtn" type="button">إعادة التحليل بالربط اليدوي</button>
+            </div>
+          </article>
+
           <div id="cacoResults" hidden>
             <div class="kpi-grid caco-kpis" id="cacoKpis"></div>
 
@@ -186,6 +194,11 @@
               </article>
             </div>
 
+            <article class="card no-print">
+              <div class="card-head"><div><h3>بطاقات الموظفين</h3><p>مبيعات، خدمات، سداد فواتير ومراجعة لكل موظف — مع إمكانية عرض عملياته.</p></div></div>
+              <div class="employee-cards caco-employee-cards" id="cacoEmployeeCards"></div>
+            </article>
+
             <div class="grid-2 caco-summary-grid">
               <article class="card">
                 <div class="card-head"><div><h3>ملخص الموظفين</h3><p>المبالغ المفصولة بين المبيعات/العمليات وسداد الفواتير.</p></div></div>
@@ -195,9 +208,9 @@
                 </table></div>
               </article>
               <article class="card">
-                <div class="card-head"><div><h3>ملخص المعرض</h3><p>حسب قيمة Branch في المصدر دون دمج أو تخمين.</p></div></div>
+                <div class="card-head"><div><h3>ملخص المعرض</h3><p>حسب قيمة Shop ID في المصدر دون دمج أو تخمين.</p></div></div>
                 <div class="table-wrap"><table>
-                  <thead><tr><th>المعرض</th><th>العمليات</th><th>مبيعات/عمليات</th><th>سداد فواتير</th><th>غير معروف</th></tr></thead>
+                  <thead><tr><th>المعرض</th><th>العمليات</th><th>مبيعات</th><th>خدمات</th><th>سداد</th><th>مبيعات/عمليات</th><th>سداد فواتير</th><th>غير معروف</th></tr></thead>
                   <tbody id="cacoBranchBody"></tbody>
                 </table></div>
               </article>
@@ -215,10 +228,11 @@
                   </select>
                 </label>
               </div>
-              <div class="table-wrap tall"><table class="caco-table">
+              <div class="table-wrap tall caco-table-only"><table class="caco-table">
                 <thead><tr><th>الصف</th><th>الموظف</th><th>الوصف</th><th>نوع العملية</th><th>نوع الخط</th><th>العائلة</th><th>الخطة</th><th>SIM</th><th>المبلغ</th><th>الخصائص</th><th>المراجعة</th></tr></thead>
                 <tbody id="cacoResultBody"></tbody>
               </table></div>
+              <div class="caco-result-cards no-print" id="cacoResultCards"></div>
             </article>
           </div>
         </section>
