@@ -1,0 +1,10 @@
+{
+  "name":"WFW430 Control Center",
+  "short_name":"WFW430",
+  "start_url":"./",
+  "display":"standalone",
+  "background_color":"#f6f8fb",
+  "theme_color":"#101828",
+  "lang":"ar",
+  "dir":"rtl"
+}
