@@ -8,20 +8,20 @@
   const HEADER_ALIASES={
     date:['date','transaction date','created date','creation date','business date','التاريخ','تاريخ العملية'],
     time:['time','transaction time','created time','الوقت','وقت العملية'],
-    employee:['employee','employee name','user','user name','username','user login','login id','created by','cashier','cashier id','agent','agent id','dealer','dealer name','salesman','sales representative','الموظف','اسم الموظف','المستخدم'],
-    msisdn:['msisdn','mobile number','subscriber number','service number','رقم الجوال','رقم الخدمة'],
+    employee:['employee','employee name','user','user name','username','user login','login id','created by','cashier','cashier id','agent','agent id','dealer','dealer name','salesman','sales representative','user id','الموظف','اسم الموظف','المستخدم'],
+    msisdn:['msisdn','mobile number','subscriber number','service number','sub no (msisdn)','sub no msisdn','رقم الجوال','رقم الخدمة'],
     transactionId:['transaction id','transaction no','transaction number','reference','reference no','order id','receipt no','رقم العملية','المرجع'],
-    description:['description','item description','transaction','transaction type','transaction name','action type','operation','operation name','product','product name','service','service name','item','details','الوصف','العملية','نوع العملية','المنتج','الخدمة','التفاصيل'],
+    description:['description','item description','transaction','transaction type','transaction name','action type','operation','operation name','product','product name','service','service name','item','details','payment order type/description','الوصف','العملية','نوع العملية','المنتج','الخدمة','التفاصيل'],
     amount:['amount','transaction amount','total amount','gross amount','net amount','price','value','total value','amount with vat','value with vat','amount incl vat','amount including vat','المبلغ','الإجمالي','القيمة','السعر'],
     simType:['sim type','sim','subscription type','نوع الشريحة','الشريحة'],
-    branch:['branch','outlet','store','shop','location','الفرع','المعرض']
+    branch:['branch','outlet','store','shop','location','shop id','الفرع','المعرض']
   };
 
   function normalizeDigits(value){
     return String(value??'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
   }
   function normalizeText(value){
-    return normalizeDigits(value).trim().toLowerCase().replace(/[\u200e\u200f\u202a-\u202e]/g,'').replace(/[_\-\/\\.:()]+/g,' ').replace(/\s+/g,' ');
+    return normalizeDigits(value).trim().toLowerCase().replace(/[\u200e\u200f\u202a-\u202e]/g,'').replace(/[_\-\/\\.:()]+/g,' ').replace(/\s+/g,' ').trim();
   }
   function canonicalHeader(value){
     const normalized=normalizeText(value);
@@ -100,33 +100,61 @@
   }
   function parseMatrix(inputMatrix,options={}){
     const matrix=(inputMatrix||[]).map(row=>Array.isArray(row)?row:[row]).filter(row=>!isBlankRow(row));
-    const header=detectHeader(matrix);
     const errors=[],warnings=[];
-    if(header.index<0||header.map.amount===undefined||header.map.description===undefined){
-      return {rows:[],totalRows:[],displayedRowCount:0,transactionCount:0,computedTotal:0,reportedTotal:null,difference:null,errors:['تعذر العثور على أعمدة الوصف والمبلغ في الملف.'],warnings,header};
+    let header;
+    if(options.manualMap){
+      header={index:typeof options.manualMap.headerIndex==='number'?options.manualMap.headerIndex:-1,score:0,map:{...options.manualMap}};
+      delete header.map.headerIndex;
+    }else{
+      header=detectHeader(matrix);
+    }
+    const headerRowCells=header.index>=0?(matrix[header.index]||[]).map(cell=>String(cell??'').trim()):[];
+    const headerMissing=options.manualMap?false:header.index<0;
+    if(headerMissing||header.map.amount===undefined||header.map.description===undefined){
+      return {rows:[],totalRows:[],ignoredRows:[],displayedRowCount:0,transactionCount:0,computedTotal:0,reportedTotal:null,difference:null,errors:['تعذر العثور على أعمدة الوصف والمبلغ في الملف.'],warnings,header,headerRowCells,headerDetected:false,sourceName:options.sourceName||''};
     }
     if(header.map.employee===undefined)warnings.push('لم يُعثر على عمود الموظف؛ ستحتاج مراجعة ربط الموظفين قبل التكامل.');
-    const rows=[],totalRows=[];
+    const rows=[],totalRows=[],ignoredRows=[];
     matrix.slice(header.index+1).forEach((raw,offset)=>{
       if(isBlankRow(raw))return;
       const sourceRow=header.index+offset+2;
-      const amount=parseAmount(raw[header.map.amount]);
+      let amount=parseAmount(raw[header.map.amount]);
       const description=String(raw[header.map.description]??'').trim();
+      const date=dateToISO(header.map.date!==undefined?raw[header.map.date]:'');
+      const time=String(header.map.time!==undefined?raw[header.map.time]??'':'').trim();
+      const employee=String(header.map.employee!==undefined?raw[header.map.employee]??'':'').trim();
+      const msisdn=String(header.map.msisdn!==undefined?raw[header.map.msisdn]??'':'').trim();
+      const transactionId=String(header.map.transactionId!==undefined?raw[header.map.transactionId]??'':'').trim();
+      const rowIsTotal=isTotalRow(raw,header.map);
+      if(rowIsTotal&&amount===null){
+        // total/footer label lives in one column but the numeric total can sit in another
+        // (e.g. "Total amount:" in column A, the number itself in column B, not under Amount).
+        for(let col=0;col<raw.length;col++){
+          if(col===header.map.amount)continue;
+          const cell=raw[col];
+          if(isTotalLabel(cell))continue;
+          if(!/\d/.test(normalizeDigits(cell)))continue;
+          const candidate=parseAmount(cell);
+          if(candidate!==null){amount=candidate;break;}
+        }
+      }
       const record={
-        sourceRow,
-        date:dateToISO(header.map.date!==undefined?raw[header.map.date]:''),
-        time:String(header.map.time!==undefined?raw[header.map.time]??'':'').trim(),
-        employee:String(header.map.employee!==undefined?raw[header.map.employee]??'':'').trim(),
-        msisdn:String(header.map.msisdn!==undefined?raw[header.map.msisdn]??'':'').trim(),
-        transactionId:String(header.map.transactionId!==undefined?raw[header.map.transactionId]??'':'').trim(),
-        description,
-        amount,
+        sourceRow,date,time,employee,msisdn,transactionId,description,amount,
         simType:String(header.map.simType!==undefined?raw[header.map.simType]??'':'').trim(),
         branch:String(header.map.branch!==undefined?raw[header.map.branch]??'':'').trim(),
         raw:raw.slice()
       };
-      if(isTotalRow(raw,header.map)){totalRows.push(record);return;}
-      if(!description&&amount===null){warnings.push(`تم تجاهل الصف ${sourceRow} لأنه لا يحتوي وصفًا أو مبلغًا.`);return;}
+      if(rowIsTotal){totalRows.push(record);return;}
+      if(!description&&amount===null){
+        ignoredRows.push({sourceRow,reason:'صف فارغ بدون وصف أو مبلغ — تم تجاهله'});
+        return;
+      }
+      const hasDateOrTime=Boolean(date||time);
+      const hasIdentity=Boolean(employee||transactionId||msisdn);
+      if(!hasDateOrTime||!hasIdentity){
+        ignoredRows.push({sourceRow,reason:'صف بدون بيانات تعريفية كافية — تم تجاهله'});
+        return;
+      }
       if(amount===null)errors.push(`المبلغ غير صالح في الصف ${sourceRow}.`);
       rows.push(record);
     });
@@ -136,9 +164,10 @@
     const difference=reportedTotal===null?null:roundMoney(computedTotal-reportedTotal);
     if(!totalRows.length)warnings.push('لا يوجد صف Total/Subtotal للتحقق الحسابي.');
     else if(difference!==0)errors.push(`فرق التحقق الحسابي ${difference.toFixed(2)} بين مجموع العمليات وصف الإجمالي.`);
+    if(ignoredRows.length)warnings.push(`تم تجاهل ${ignoredRows.length} صف/صفوف بدون بيانات تعريفية كافية.`);
     return {
-      rows,totalRows,displayedRowCount:rows.length+totalRows.length,transactionCount:rows.length,
-      computedTotal,reportedTotal,difference,errors,warnings,header,sourceName:options.sourceName||''
+      rows,totalRows,ignoredRows,displayedRowCount:rows.length+totalRows.length,transactionCount:rows.length,
+      computedTotal,reportedTotal,difference,errors,warnings,header,headerRowCells,headerDetected:true,sourceName:options.sourceName||''
     };
   }
   function parseWorkbook(arrayBuffer,XLSX,options={}){

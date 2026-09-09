@@ -55,6 +55,32 @@ test('unknown patterns are retained for review and amounts remain unchanged',()=
   assert.equal(x.reviewReason,'UNKNOWN_PATTERN');
 });
 
+test('real report multi-line new-postpaid-line description stays one sale with RS discount attribute',()=>{
+  const {buildRealMatrix}=require('./fixtures/caco-real-matrix.js');
+  const parser=require('../caco-parser.js');
+  const parsed=parser.parseMatrix(buildRealMatrix());
+  const classified=classifier.classify(parsed.rows);
+  const newLineRows=classified.rows.filter(r=>r.description.includes('New Mobile Line'));
+  assert.equal(newLineRows.length,1);
+  assert.equal(newLineRows[0].classification,'new_postpaid');
+  assert.equal(newLineRows[0].transactionType,'sale');
+  assert.deepEqual(newLineRows[0].attributes,['RS discount']);
+});
+
+test('invoice payment rows are excluded from sales/operations totals in summarize()',()=>{
+  const {buildRealMatrix}=require('./fixtures/caco-real-matrix.js');
+  const parser=require('../caco-parser.js');
+  const parsed=parser.parseMatrix(buildRealMatrix());
+  const classified=classifier.classify(parsed.rows);
+  const invoiceRows=classified.rows.filter(r=>r.transactionType==='invoice_payment');
+  assert.equal(invoiceRows.length,9);
+  const expectedInvoiceAmount=Math.round(invoiceRows.reduce((sum,r)=>sum+r.amount,0)*100)/100;
+  assert.equal(classified.summary.branch.invoicePaymentAmount,expectedInvoiceAmount);
+  assert.equal(classified.summary.branch.invoicePayments,invoiceRows.length);
+  const nonInvoiceRows=classified.rows.filter(r=>r.transactionType!=='invoice_payment');
+  assert.ok(!nonInvoiceRows.some(r=>r.transactionType==='invoice_payment'));
+});
+
 test('summary reconciles classified buckets without treating 882.95 as a rule',()=>{
   const result=classifier.classify([
     {...row('Invoice Payment'),amount:882.95},
